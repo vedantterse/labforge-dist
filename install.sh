@@ -90,6 +90,11 @@ ok "Latest published version is $VERSION"
 SUMS_URL="$(dirname "$URL")/SHA256SUMS"
 
 TMP="$(mktemp -d)"
+# mktemp -d makes a 0700 directory, which the unprivileged `_apt` user cannot
+# traverse. apt then prints an alarming-looking "Download is performed
+# unsandboxed as root ... Permission denied" note and falls back to copying as
+# root. The install works either way, but students should not see that.
+chmod 755 "$TMP"
 FILE="$TMP/$(basename "$URL")"
 
 say "Downloading $(basename "$URL")"
@@ -114,6 +119,9 @@ fi
 # --- install ----------------------------------------------------------------
 
 if [ "$FORMAT" = "deb" ]; then
+  # Readable by _apt, for the same reason as the directory above.
+  chmod 644 "$FILE" 2>/dev/null || true
+
   say "Installing (you will be asked for your password)"
 
   # --reinstall matters: without it apt silently skips when the same version is
@@ -161,7 +169,45 @@ else
 
   say "Installing to $APP_DIR"
   install -m 755 "$FILE" "$APP_DIR/Labforge.AppImage"
-  ln -sf "$APP_DIR/Labforge.AppImage" "$INSTALL_DIR/labforge"
+
+  # Chromium needs one of two sandboxes: unprivileged user namespaces, or a
+  # setuid helper owned by root with mode 4755. A .deb can chmod that helper
+  # during postinst; an AppImage cannot - it mounts read-only under /tmp owned
+  # by the user, so the SUID bit can never apply. On distributions that restrict
+  # unprivileged user namespaces (Ubuntu 24.04+ does, via AppArmor) the app dies
+  # at startup with "SUID sandbox helper binary was found, but is not configured
+  # correctly".
+  #
+  # This launcher keeps the sandbox wherever it genuinely works and only drops it
+  # when the kernel leaves no alternative.
+  cat > "$INSTALL_DIR/labforge" <<'LAUNCHER'
+#!/usr/bin/env bash
+APPIMAGE="$HOME/.local/share/labforge/Labforge.AppImage"
+
+if [ ! -x "$APPIMAGE" ]; then
+  echo "Labforge is not installed at $APPIMAGE" >&2
+  exit 1
+fi
+
+# Same test electron-builder's Debian postinst uses.
+if [ -L /proc/self/ns/user ] && unshare --user true >/dev/null 2>&1; then
+  exec "$APPIMAGE" "$@"
+fi
+
+# No usable namespace sandbox on this kernel.
+exec "$APPIMAGE" --no-sandbox "$@"
+LAUNCHER
+  chmod +x "$INSTALL_DIR/labforge"
+
+  if [ -L /proc/self/ns/user ] && unshare --user true >/dev/null 2>&1; then
+    ok "Kernel supports the namespace sandbox - it stays enabled"
+  else
+    warn "This kernel restricts unprivileged user namespaces, so Chromium's"
+    warn "sandbox cannot start from an AppImage. Labforge will run without it."
+    printf '    To keep the sandbox, either install the .deb instead, or run:\n'
+    printf '      echo "kernel.apparmor_restrict_unprivileged_userns=0" | sudo tee /etc/sysctl.d/60-userns.conf\n'
+    printf '      sudo sysctl --system\n\n'
+  fi
 
   # Pull the icon out of the AppImage so the menu entry is not blank.
   ( cd "$TMP" && "$APP_DIR/Labforge.AppImage" --appimage-extract 'labforge.png' >/dev/null 2>&1 || true )
@@ -177,7 +223,7 @@ else
 Type=Application
 Name=Labforge
 Comment=Run your college lab environments in one click
-Exec=$APP_DIR/Labforge.AppImage %U
+Exec=$INSTALL_DIR/labforge %U
 Icon=$ICON
 Terminal=false
 Categories=Development;Education;IDE;
