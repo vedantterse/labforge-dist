@@ -1,0 +1,135 @@
+id: kubernetes
+title: Kubernetes Cluster (k3s)
+practical: Practical 4.2
+module: Configuration Automation, Orchestration & Cloud Provisioning
+summary: A real single-node Kubernetes cluster with kubectl ready to use — pods, deployments, services and ingress without minikube or a VM.
+tags: [kubernetes, k3s, kubectl, orchestration, lo4]
+version: 1.0.0
+estimateMb: 1536
+
+services:
+  - id: k3s
+    name: Kubernetes (k3s)
+    kind: terminal
+    image: rancher/k3s:v1.30.2-k3s1
+    description: Lightweight certified Kubernetes. Open a Shell and use kubectl.
+    estimateMb: 1400
+    privileged: true
+    shell: [/bin/sh]
+    shells:
+      - id: kubectl
+        label: kubectl watch
+        description: Live view of every pod in the cluster.
+        cmd: [sh, -c, 'kubectl get pods -A -w']
+    cmd:
+      - server
+      - --disable=traefik
+      - --disable=metrics-server
+      - --write-kubeconfig-mode=644
+      - --tls-san=127.0.0.1
+    env:
+      K3S_KUBECONFIG_OUTPUT: /output/kubeconfig.yaml
+      K3S_KUBECONFIG_MODE: '644'
+    ports:
+      - name: api
+        container: 6443
+        preferred: 6443
+        range: [6443, 6480]
+        internal: true
+      - name: http
+        container: 30080
+        preferred: 30080
+        range: [30080, 30120]
+      - name: https
+        container: 30443
+        preferred: 30443
+        range: [30443, 30480]
+        internal: true
+    volumes:
+      - name: rancher
+        path: /var/lib/rancher/k3s
+      - name: output
+        path: /output
+    health:
+      type: exec
+      cmd: [kubectl, get, nodes]
+      timeoutSec: 300
+      intervalSec: 5
+
+guide: |
+  ## What you get
+
+  A genuine Kubernetes control plane and node in one container (k3s, a CNCF
+  certified distribution). `kubectl` is already inside and already authenticated.
+
+  NodePort `30080` is published to your machine, so anything you expose on that
+  port is reachable from your browser at the **http** URL above.
+
+  ## Step 1 - open a shell and look around
+
+  ```sh
+  kubectl get nodes
+  kubectl get pods -A
+  kubectl cluster-info
+  ```
+
+  ## Step 2 - pods
+
+  ```sh
+  kubectl run web --image=nginx:alpine
+  kubectl get pods -w        # Ctrl+C to stop watching
+  kubectl describe pod web
+  kubectl logs web
+  kubectl exec -it web -- sh
+  ```
+
+  ## Step 3 - deployments and scaling
+
+  ```sh
+  kubectl create deployment site --image=nginx:alpine --replicas=3
+  kubectl get deploy,rs,pods
+  kubectl scale deployment site --replicas=5
+  kubectl set image deployment/site nginx=nginx:1.27-alpine
+  kubectl rollout status deployment/site
+  kubectl rollout undo deployment/site
+  ```
+
+  ## Step 4 - services, reachable from your browser
+
+  ```sh
+  kubectl expose deployment site --type=NodePort --port=80
+  kubectl patch svc site -p '{"spec":{"ports":[{"port":80,"nodePort":30080}]}}'
+  kubectl get svc site
+  ```
+
+  Now open the **http** URL from the Services tab — the nginx welcome page is
+  being served by your deployment.
+
+  ## Step 5 - declarative manifests
+
+  Write `app.yaml` with `vi`, then:
+
+  ```sh
+  kubectl apply -f app.yaml
+  kubectl diff -f app.yaml
+  kubectl delete -f app.yaml
+  ```
+
+  For the journal, show the same application created imperatively and
+  declaratively, and explain why the declarative form is what real teams use.
+
+  ## Using kubectl from your own machine
+
+  ```sh
+  cat /output/kubeconfig.yaml
+  ```
+
+  Copy that to `~/.kube/config` on your host and change the server address to
+  the api port shown on the Services tab.
+
+  ## Troubleshooting
+
+  - **Pods stuck in `ContainerCreating`**: the node is still pulling images. Give
+    it a minute and re-check with `kubectl describe pod`.
+  - **Cluster will not start on Windows**: k3s needs a Linux kernel. Make sure
+    Docker Desktop is using the WSL 2 backend, not Windows containers.

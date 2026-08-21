@@ -1,0 +1,151 @@
+id: selenium
+title: Automated Testing — Selenium Grid
+practical: Practical 5.1
+module: Testing, Monitoring, Serverless & DevSecOps
+summary: A Selenium grid with a real Chrome browser you can watch through your browser while your tests drive it. No local driver or version mismatch.
+tags: [selenium, testing, pytest, chrome, lo5]
+version: 1.0.0
+estimateMb: 1536
+
+services:
+  - id: selenium
+    name: Selenium Chrome
+    kind: web
+    image: selenium/standalone-chrome:127.0
+    description: Chrome plus WebDriver, with a live view over noVNC.
+    estimateMb: 1200
+    openPath: /
+    ports:
+      - name: webdriver
+        container: 4444
+        preferred: 4444
+        range: [4444, 4480]
+      - name: view
+        container: 7900
+        preferred: 7900
+        range: [7900, 7940]
+    env:
+      SE_NODE_MAX_SESSIONS: '2'
+      SE_SCREEN_WIDTH: '1440'
+      SE_SCREEN_HEIGHT: '900'
+    health:
+      type: http
+      port: webdriver
+      path: /status
+      timeoutSec: 180
+    credentials:
+      - label: Live view password
+        password: secret
+        secret: false
+        note: Open the "view" URL and enter this to watch the browser.
+
+  - id: runner
+    name: Test Runner
+    kind: terminal
+    image: python:3.12-slim
+    description: Python with pytest and selenium installed, for writing your tests.
+    estimateMb: 300
+    shell: [/bin/bash, /bin/sh]
+    cmd: [sleep, infinity]
+    postStart:
+      - description: Installing pytest and the selenium client
+        cmd: [sh, -c, 'pip install --quiet --no-cache-dir selenium pytest']
+
+connections:
+  - from: runner
+    to: selenium
+    internalUrl: http://selenium:4444
+    note: The remote WebDriver URL to use in your test code.
+
+guide: |
+  ## The version mismatch problem, solved
+
+  Normally Selenium fails because the local Chrome and chromedriver versions
+  differ. Here the browser and its driver live in one container that was built
+  together, and your test connects to it over the network.
+
+  ## Step 1 - watch the browser
+
+  Open the **view** URL, enter the password `secret`, and leave the tab open. You
+  will see the browser react as your tests run.
+
+  ## Step 2 - write a test
+
+  Open a **Shell** on *Test Runner* and create the file:
+
+  ```bash
+  cat > /test_lab.py <<'EOF'
+  from selenium import webdriver
+  from selenium.webdriver.common.by import By
+  from selenium.webdriver.chrome.options import Options
+
+
+  def make_driver():
+      opts = Options()
+      return webdriver.Remote(command_executor="http://selenium:4444", options=opts)
+
+
+  def test_page_title():
+      driver = make_driver()
+      try:
+          driver.get("https://example.com")
+          assert "Example Domain" in driver.title
+      finally:
+          driver.quit()
+
+
+  def test_heading_text():
+      driver = make_driver()
+      try:
+          driver.get("https://example.com")
+          heading = driver.find_element(By.TAG_NAME, "h1")
+          assert heading.text == "Example Domain"
+      finally:
+          driver.quit()
+  EOF
+  ```
+
+  ## Step 3 - run it
+
+  ```bash
+  pytest -v /test_lab.py
+  ```
+
+  Watch the live view tab while it runs.
+
+  ## Step 4 - interaction and waits
+
+  ```python
+  from selenium.webdriver.support.ui import WebDriverWait
+  from selenium.webdriver.support import expected_conditions as EC
+
+  driver.get("https://www.google.com")
+  box = WebDriverWait(driver, 10).until(
+      EC.presence_of_element_located((By.NAME, "q"))
+  )
+  box.send_keys("devops")
+  box.submit()
+  driver.save_screenshot("/result.png")
+  ```
+
+  Explicit waits instead of `time.sleep` is one of the marks the examiner looks
+  for — mention it in your journal.
+
+  ## Step 5 - run the suite from Jenkins
+
+  If the Jenkins lab is running, a pipeline stage becomes:
+
+  ```groovy
+  stage('UI tests') {
+      steps {
+          sh 'pip install selenium pytest'
+          sh 'pytest -v test_lab.py --junitxml=results.xml'
+      }
+      post { always { junit 'results.xml' } }
+  }
+  ```
+
+  ## No internet?
+
+  Point the tests at another lab instead — for example `http://gitea:3000` or
+  `http://jenkins:8080` if those labs are running.

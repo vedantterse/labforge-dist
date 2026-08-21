@@ -1,0 +1,126 @@
+{
+  "version": "2026-08-21",
+  "minAppVersion": "0.2.0",
+  "subjectsFile": "subjects.yaml",
+  "labs": [
+    {
+      "id": "mongodb",
+      "subject": "database",
+      "file": "mongodb.yaml",
+      "version": "1.0.0",
+      "sha256": "77ee82907c1a173a8bba925331a1bdd0f15f7514e0a0a83dde6786261bf4fd96"
+    },
+    {
+      "id": "mysql",
+      "subject": "database",
+      "file": "mysql.yaml",
+      "version": "1.0.0",
+      "sha256": "60c2a6d49c904aa07094181be02b262fe608fb7fbd0bb7cb446f21890c565ca0"
+    },
+    {
+      "id": "postgresql",
+      "subject": "database",
+      "file": "postgresql.yaml",
+      "version": "1.0.0",
+      "sha256": "33d1211e986ce724a651a4f373a6dbe0c9c0601dfab546587687f6774d369781"
+    },
+    {
+      "id": "agile-board",
+      "subject": "devops",
+      "file": "agile-board.yaml",
+      "version": "1.0.0",
+      "sha256": "08a0763b337449ffffbae36295c904ecee75b2747b369b00b0e65a33c72dd222"
+    },
+    {
+      "id": "ansible",
+      "subject": "devops",
+      "file": "ansible.yaml",
+      "version": "1.0.0",
+      "sha256": "bccd3e6e76379c53be7b227a69b53f924a5d4dffb0dba428d21bb5c31924d1ce"
+    },
+    {
+      "id": "docker-playground",
+      "subject": "devops",
+      "file": "docker-playground.yaml",
+      "version": "1.0.0",
+      "sha256": "41a8c2c096bed310514d17763fb086c3bac9a57e53bcf850480c4aa6cd5bd968"
+    },
+    {
+      "id": "gitea",
+      "subject": "devops",
+      "file": "gitea.yaml",
+      "version": "1.0.0",
+      "sha256": "d983bb7009d340579e85a5d787e5c3d5649f9d2ba59f54b07a03220d3bd56c07"
+    },
+    {
+      "id": "jenkins",
+      "subject": "devops",
+      "file": "jenkins.yaml",
+      "version": "1.0.0",
+      "sha256": "2fccdb3ac3870d17eea4fc8930beb1a6551cce606d4bab8b3592398a72b69be6"
+    },
+    {
+      "id": "jenkins-agents",
+      "subject": "devops",
+      "file": "jenkins-agents.yaml",
+      "version": "1.0.0",
+      "sha256": "6458683e7047061becbce6decabf496e2a66426a349f61e729abda902c42a0b7"
+    },
+    {
+      "id": "jenkins-sonarqube",
+      "subject": "devops",
+      "file": "jenkins-sonarqube.yaml",
+      "version": "1.0.0",
+      "sha256": "021510eae3db8b4c84c0eee240237b2b8931bf2e968f44568403ec76b43eaf61"
+    },
+    {
+      "id": "kubernetes",
+      "subject": "devops",
+      "file": "kubernetes.yaml",
+      "version": "1.0.0",
+      "sha256": "2ef1a07374997c40a686e7fee3869d9322a4ae5ba5cd072b8643f2eb23b27d87"
+    },
+    {
+      "id": "linux-machines",
+      "subject": "devops",
+      "file": "linux-machines.yaml",
+      "version": "1.1.0",
+      "sha256": "94a062abc0ad320156181ea662d1e7424da5f865764c33f7886a6d7403c2e34b"
+    },
+    {
+      "id": "monitoring",
+      "subject": "devops",
+      "file": "monitoring.yaml",
+      "version": "1.0.0",
+      "sha256": "612c4a8085589ce377bb68b78c6b76d6ceac4d10b94b73840b8e4748c9ddb077"
+    },
+    {
+      "id": "nagios",
+      "subject": "devops",
+      "file": "nagios.yaml",
+      "version": "1.0.0",
+      "sha256": "d587580f189b1fa3249dd67f53cfec307f129462d55244874ac2abe43b4a52e5"
+    },
+    {
+      "id": "selenium",
+      "subject": "devops",
+      "file": "selenium.yaml",
+      "version": "1.0.0",
+      "sha256": "c7b4b36818c1fa79940a886940cd996fb4a313a4da20366e0acddc8b86ebf035"
+    },
+    {
+      "id": "terraform",
+      "subject": "devops",
+      "file": "terraform.yaml",
+      "version": "1.0.0",
+      "sha256": "8f556aa0ed5b3de61846ebe738beddecce9ee986e118a2881cf1cdb0bcbd4be7"
+    },
+    {
+      "id": "ubuntu-machine",
+      "subject": "unix",
+      "file": "ubuntu-machine.yaml",
+      "version": "1.0.0",
+      "sha256": "3321111c94998f5b7af0b19829491c663d550e52982f3d48c3f3256cc280532e"
+    }
+  ]
+}

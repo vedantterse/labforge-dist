@@ -1,0 +1,193 @@
+id: linux-machines
+subject: devops
+title: Blank Linux Machines
+module: Utilities
+summary: Choose how many Ubuntu machines to start (up to 5). They come up on one network, already able to SSH to each other without a password.
+tags: [ubuntu, ssh, sandbox, networking, practice]
+version: 1.1.0
+icon: server
+
+parameters:
+  - id: count
+    label: How many machines?
+    type: number
+    default: 3
+    min: 1
+    max: 5
+    estimateMbPerUnit: 384
+    help: Each machine uses roughly 384 MB of RAM. Three is enough for most exercises.
+
+services:
+  - id: machine
+    name: Ubuntu Machine
+    kind: node
+    replicasFrom: count
+    build:
+      context: lab-node
+      tag: labforge/lab-node:1
+    description: Ubuntu 22.04 with SSH, Python, Java, sudo and the usual network tools.
+    estimateMb: 384
+    shell: [/bin/bash]
+    health:
+      type: exec
+      cmd: [sh, -c, 'pgrep sshd']
+      timeoutSec: 90
+    credentials:
+      - label: Root login
+        username: root
+        password: labforge
+        secret: false
+      - label: Normal user
+        username: student
+        password: labforge
+        secret: false
+        note: Has passwordless sudo.
+
+wiring:
+  - type: ssh-key
+    from: machine-1
+    to: [machine-2, machine-3, machine-4, machine-5]
+    inventoryPath: /root/inventory.ini
+
+guide: |
+  ## What you have
+
+  The machines are named `machine-1`, `machine-2` and so on, up to the number
+  you chose. They all sit on the same Docker network (`labforge-net`), so each
+  one can reach the others **by name** — no IP addresses to look up.
+
+  `machine-1` has already had an SSH key generated and installed on every other
+  machine, so it can log in to them without a password.
+
+  **The password on every machine is `labforge`**, for both `root` and `student`.
+
+  Nothing is persisted. Break them freely — Stop and Launch gives you clean
+  machines again.
+
+  ## Step 1 — get into a machine
+
+  Press **Shell** on any machine card above. That drops you straight into a root
+  prompt on that machine.
+
+  From your own terminal instead, use the command shown on each card:
+
+  ```bash
+  docker exec -it labforge-linux-machines-machine-1 /bin/bash
+  ```
+
+  Change the number at the end to reach a different machine.
+
+  ## Step 2 — confirm they can see each other
+
+  From `machine-1`:
+
+  ```bash
+  hostname                 # confirms which machine you are on
+  ping -c 3 machine-2
+  ping -c 3 machine-3
+  ```
+
+  Find a machine's IP address if an exercise needs it:
+
+  ```bash
+  hostname -I              # this machine
+  getent hosts machine-2   # another machine
+  ```
+
+  ## Step 3 — SSH from one machine to another
+
+  From `machine-1`, no password is needed — the key is already installed:
+
+  ```bash
+  ssh root@machine-2
+  hostname                 # you are now on machine-2
+  exit                     # back to machine-1
+  ```
+
+  Run a single command remotely without logging in:
+
+  ```bash
+  ssh root@machine-2 hostname
+  ssh root@machine-3 "uname -a; uptime"
+  ```
+
+  Going the **other** way — from `machine-2` to `machine-1` — asks for a
+  password, because only `machine-1` has a key installed elsewhere:
+
+  ```bash
+  ssh root@machine-1       # password: labforge
+  ```
+
+  ## Step 4 — set up passwordless SSH yourself
+
+  Do this once by hand. The exam asks for the steps, and it is the same
+  procedure behind Ansible and Jenkins agents.
+
+  On `machine-2`:
+
+  ```bash
+  ssh-keygen -t ed25519 -N "" -f ~/.ssh/id_ed25519
+  cat ~/.ssh/id_ed25519.pub
+  ```
+
+  Copy the key across:
+
+  ```bash
+  ssh-copy-id root@machine-3          # password: labforge
+  ssh root@machine-3                  # no password this time
+  ```
+
+  If `ssh-copy-id` is unavailable, the manual equivalent — worth knowing:
+
+  ```bash
+  cat ~/.ssh/id_ed25519.pub | ssh root@machine-3 \
+      "mkdir -p ~/.ssh && chmod 700 ~/.ssh && cat >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys"
+  ```
+
+  ## Step 5 — copy files between machines
+
+  ```bash
+  echo "hello from machine-1" > /root/note.txt
+  scp /root/note.txt root@machine-2:/root/
+  ssh root@machine-2 cat /root/note.txt
+
+  # whole directories
+  scp -r /root/mydir root@machine-2:/root/
+  rsync -av /root/mydir/ root@machine-2:/root/mydir/
+  ```
+
+  ## Step 6 — run one command everywhere
+
+  A generated inventory listing every machine is already on `machine-1` at
+  `/root/inventory.ini`. Without Ansible, a plain loop does the job:
+
+  ```bash
+  for host in machine-2 machine-3; do
+      echo "=== $host ==="
+      ssh root@$host "hostname; free -h | head -2"
+  done
+  ```
+
+  ## What this lab is for
+
+  - Practising the master/slave setup by hand before doing it in Jenkins.
+  - Writing an Ansible inventory yourself instead of having one generated.
+  - Any "configure server A from server B" exercise.
+  - Testing shell scripts somewhere you cannot damage your own system.
+
+  ## Installing software
+
+  These are ordinary Ubuntu machines with network access:
+
+  ```bash
+  apt-get update && apt-get install -y nginx
+  service nginx start
+  curl localhost
+  ```
+
+  Do it on `machine-2`, then check from `machine-1` that it is reachable across
+  the network:
+
+  ```bash
+  curl http://machine-2
+  ```

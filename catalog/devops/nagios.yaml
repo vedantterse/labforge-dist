@@ -1,0 +1,216 @@
+id: nagios
+subject: devops
+title: Nagios Monitoring
+practical: Practical 5.4 (alternative)
+module: Testing, Monitoring, Serverless & DevSecOps
+summary: Nagios Core with its web console, plus two Linux hosts to add as monitored targets — the check-based counterpart to the Prometheus lab.
+tags: [nagios, monitoring, alerting, lo5]
+version: 1.0.0
+estimateMb: 1200
+
+services:
+  - id: nagios
+    name: Nagios Core
+    kind: web
+    image: jasonrivers/nagios:latest
+    description: Nagios Core 4 with the classic CGI web interface and the standard plugins.
+    estimateMb: 500
+    openPath: /nagios
+    ports:
+      - name: web
+        container: 80
+        preferred: 8083
+        range: [8083, 8130]
+    env:
+      NAGIOSADMIN_USER: nagiosadmin
+      NAGIOSADMIN_PASS: labforge
+    volumes:
+      - name: etc
+        path: /opt/nagios/etc
+      - name: var
+        path: /opt/nagios/var
+    health:
+      type: http
+      port: web
+      path: /nagios/
+      expectStatus: [200, 401]
+      timeoutSec: 240
+    credentials:
+      - label: Web login
+        username: nagiosadmin
+        password: labforge
+        secret: false
+
+  - id: target
+    name: Monitored Host
+    kind: node
+    replicas: 2
+    build:
+      context: lab-node
+      tag: labforge/lab-node:1
+    description: Ubuntu machine for Nagios to watch. An HTTP server is started on it for you.
+    estimateMb: 350
+    shell: [/bin/bash]
+    health:
+      type: exec
+      cmd: [sh, -c, 'pgrep sshd']
+      timeoutSec: 90
+    postStart:
+      - description: Starting a web service for Nagios to check
+        ignoreFailure: true
+        cmd:
+          - sh
+          - -c
+          - (apt-get update -qq && apt-get install -y -qq nginx >/dev/null 2>&1 && service nginx start) || true
+
+connections:
+  - from: nagios
+    to: target-1
+    internalUrl: target-1
+    note: Use this as the address in the host definition. Nagios resolves it on the lab network.
+  - from: nagios
+    to: target-2
+    internalUrl: target-2
+    note: The second monitored host.
+
+guide: |
+  ## Nagios versus Prometheus
+
+  Both appear in the syllabus. The difference is worth stating in your journal:
+
+  - **Nagios** runs *checks* on a schedule and reports OK / WARNING / CRITICAL.
+    It is state-based and agent-oriented.
+  - **Prometheus** *scrapes numeric metrics* and stores them as time series, so
+    you can graph and query history.
+
+  Nagios answers "is it up?"; Prometheus answers "how has it behaved?".
+
+  ## Step 1 — open the console
+
+  Open the web URL and sign in as `nagiosadmin` / `labforge`. Nagios already
+  monitors itself: check **Hosts** and **Services** in the left menu.
+
+  Give it two or three minutes after first launch — checks are scheduled, so
+  the service list fills in gradually rather than all at once.
+
+  ## Step 2 — add your own hosts
+
+  Open a **Shell** on the Nagios Core service and create a configuration file:
+
+  ```bash
+  cat > /opt/nagios/etc/objects/labhosts.cfg <<'EOF'
+  define host {
+      use                     linux-server
+      host_name               target-1
+      alias                   Lab Target 1
+      address                 target-1
+      max_check_attempts      3
+      check_period            24x7
+      notification_interval   30
+      notification_period     24x7
+  }
+
+  define host {
+      use                     linux-server
+      host_name               target-2
+      alias                   Lab Target 2
+      address                 target-2
+      max_check_attempts      3
+      check_period            24x7
+      notification_interval   30
+      notification_period     24x7
+  }
+
+  define hostgroup {
+      hostgroup_name          lab-targets
+      alias                   Lab Target Machines
+      members                 target-1,target-2
+  }
+
+  define service {
+      use                     generic-service
+      hostgroup_name          lab-targets
+      service_description     PING
+      check_command           check_ping!100.0,20%!500.0,60%
+  }
+
+  define service {
+      use                     generic-service
+      hostgroup_name          lab-targets
+      service_description     HTTP
+      check_command           check_http
+  }
+
+  define service {
+      use                     generic-service
+      hostgroup_name          lab-targets
+      service_description     SSH
+      check_command           check_ssh
+  }
+  EOF
+  ```
+
+  Register the file so Nagios reads it:
+
+  ```bash
+  grep -q labhosts /opt/nagios/etc/nagios.cfg || \
+    echo "cfg_file=/opt/nagios/etc/objects/labhosts.cfg" >> /opt/nagios/etc/nagios.cfg
+  ```
+
+  ## Step 3 — verify before restarting
+
+  Always validate the configuration first. A syntax error stops Nagios from
+  starting at all:
+
+  ```bash
+  /opt/nagios/bin/nagios -v /opt/nagios/etc/nagios.cfg
+  ```
+
+  Look for `Total Warnings: 0` and `Total Errors: 0`, then reload:
+
+  ```bash
+  supervisorctl restart nagios 2>/dev/null || killall -HUP nagios
+  ```
+
+  Refresh the web console — `target-1` and `target-2` now appear under **Hosts**
+  with PING, HTTP and SSH services.
+
+  ## Step 4 — force a failure
+
+  This is the part that demonstrates monitoring actually works. Open a **Shell**
+  on *Monitored Host 1* and stop its web server:
+
+  ```bash
+  service nginx stop
+  ```
+
+  In Nagios, open the HTTP service for `target-1` and press **Re-schedule the
+  next check of this service**. Within a minute it turns **CRITICAL**.
+
+  Start it again and watch it return to OK:
+
+  ```bash
+  service nginx start
+  ```
+
+  Screenshot both states — the transition is what earns the marks.
+
+  ## Step 5 — thresholds and notifications
+
+  Look at how `check_ping!100.0,20%!500.0,60%` is read:
+
+  - warning at 100 ms average latency or 20% packet loss
+  - critical at 500 ms or 60% loss
+
+  Change the warning threshold to something your machines will trip, re-validate,
+  reload, and show the state change. Notification commands are defined in
+  `/opt/nagios/etc/objects/commands.cfg` — email will not leave the container,
+  but the **Notifications** page records that Nagios tried, which is enough to
+  demonstrate the flow.
+
+  ## Troubleshooting
+
+  - **Host shows DOWN immediately**: the address is wrong. It must be `target-1`,
+    the name on the lab network, not an IP or localhost.
+  - **Nagios will not restart**: run the `-v` verification command again; it
+    prints the exact file and line.

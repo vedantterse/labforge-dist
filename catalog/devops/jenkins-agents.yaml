@@ -1,0 +1,167 @@
+id: jenkins-agents
+title: Jenkins Controller + Build Agents
+practical: Practical 3.1 (extension)
+module: CI/CD Automation using Jenkins & Docker
+summary: Jenkins controller with two Linux build agents on the same network, SSH keys already exchanged, for the master-slave distributed build exercise.
+tags: [jenkins, master-slave, agents, ssh, lo3]
+version: 1.0.0
+estimateMb: 2048
+
+services:
+  - id: jenkins
+    name: Jenkins Controller
+    kind: web
+    image: jenkins/jenkins:lts-jdk17
+    description: The controller that schedules work onto the agents.
+    estimateMb: 1024
+    openPath: /
+    ports:
+      - name: web
+        container: 8080
+        preferred: 8080
+        range: [8080, 8120]
+      - name: agent
+        container: 50000
+        preferred: 50000
+        range: [50000, 50050]
+        internal: true
+    volumes:
+      - name: home
+        path: /var/jenkins_home
+    health:
+      type: http
+      port: web
+      path: /login
+      expectStatus: [200, 403]
+      timeoutSec: 300
+    credentials:
+      - label: Unlock key
+        username: admin
+        from:
+          type: file
+          path: /var/jenkins_home/secrets/initialAdminPassword
+
+  - id: agent
+    name: Build Agent
+    kind: node
+    replicas: 2
+    build:
+      context: lab-node
+      tag: labforge/lab-node:1
+    description: Ubuntu machine with a JRE and SSH, ready to be added as a Jenkins node.
+    estimateMb: 384
+    shell: [/bin/bash]
+    credentials:
+      - label: SSH login
+        username: root
+        password: labforge
+        secret: false
+        note: Also usable as student / labforge with passwordless sudo.
+
+wiring:
+  # The Jenkins image does not always ship ssh-keygen; make sure it is there
+  # before the key exchange runs.
+  - type: exec
+    service: jenkins
+    user: root
+    description: Preparing SSH tooling on the controller
+    cmd:
+      - bash
+      - -lc
+      - command -v ssh-keygen >/dev/null 2>&1 || (apt-get update -qq && apt-get install -y -qq openssh-client)
+
+  - type: ssh-key
+    from: jenkins
+    to: [agent]
+
+  # The in-app shell runs as the `jenkins` user, which cannot read /root.
+  # Publish a readable copy of the private key for the credential step.
+  - type: exec
+    service: jenkins
+    user: root
+    description: Publishing the agent key where Jenkins can read it
+    cmd:
+      - bash
+      - -lc
+      - cp /root/.ssh/id_ed25519 /var/jenkins_home/lab-agent-key && chown jenkins /var/jenkins_home/lab-agent-key && chmod 600 /var/jenkins_home/lab-agent-key
+
+connections:
+  - from: jenkins
+    to: agent-1
+    internalUrl: agent-1:22
+    note: Host name to type into Jenkins when adding the node. Port 22, root user.
+  - from: jenkins
+    to: agent-2
+    internalUrl: agent-2:22
+    note: The second agent. Same credentials.
+
+guide: |
+  ## The idea
+
+  A Jenkins **controller** decides what to build; **agents** (the old
+  master/slave terminology) do the actual work. Here you get one controller and
+  two Ubuntu agents on the same Docker network, so they can already reach each
+  other by name.
+
+  Labforge has already generated an SSH keypair on the controller and installed
+  the public key on both agents, so the connection step below just works.
+
+  ## Step 1 - unlock Jenkins
+
+  Open the controller URL, paste the **Unlock key** from the Services tab,
+  install the suggested plugins, and create your admin user.
+
+  ## Step 2 - add the SSH private key as a credential
+
+  1. **Manage Jenkins** -> **Credentials** -> **System** -> **Global credentials** -> **Add Credentials**.
+  2. Kind: **SSH Username with private key**.
+  3. ID: `lab-agent`, Username: `root`.
+  4. Private Key -> **Enter directly**. Get the key by opening a **Shell** on the
+     Jenkins controller (button on the Services tab) and running:
+
+  ```bash
+  cat /var/jenkins_home/lab-agent-key
+  ```
+
+  Copy everything including the BEGIN and END lines, paste it, and save.
+
+  ## Step 3 - register each agent
+
+  1. **Manage Jenkins** -> **Nodes** -> **New Node**.
+  2. Name: `agent-1`, type **Permanent Agent**.
+  3. Remote root directory: `/home/jenkins`
+  4. Labels: `linux`
+  5. Launch method: **Launch agents via SSH**
+  6. Host: `agent-1`  (this is the container name on the lab network - do **not** use localhost)
+  7. Credentials: the `lab-agent` credential you created.
+  8. Host Key Verification Strategy: **Non verifying**.
+  9. Save. The agent should go online within a few seconds.
+
+  Repeat with host `agent-2`.
+
+  ## Step 4 - prove work is distributed
+
+  Create a pipeline job with this script and run it twice:
+
+  ```groovy
+  pipeline {
+      agent { label 'linux' }
+      stages {
+          stage('Where am I?') {
+              steps {
+                  sh 'hostname'
+                  sh 'uname -a'
+              }
+          }
+      }
+  }
+  ```
+
+  The `hostname` output shows which agent picked up the build.
+
+  ## Troubleshooting
+
+  - **Agent stays offline**: check the log on the node page. "Connection refused"
+    means you typed `localhost` instead of `agent-1`.
+  - **Permission denied (publickey)**: the private key was pasted without the
+    BEGIN/END lines, or with a trailing space.

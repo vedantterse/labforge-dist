@@ -1,0 +1,177 @@
+id: mongodb
+subject: database
+title: MongoDB
+practical: Practical 3
+module: Document Databases
+summary: MongoDB 7 with Mongo Express as a browser console, and mongosh in a shell for the document-model exercises.
+tags: [mongodb, nosql, document, mongosh]
+version: 1.0.0
+estimateMb: 900
+
+services:
+  - id: mongo
+    name: MongoDB Server
+    kind: terminal
+    image: mongo:7
+    description: MongoDB 7 replica-set-free single node. Open a Shell and run mongosh.
+    estimateMb: 600
+    shell: [/bin/bash, /bin/sh]
+    shells:
+      - id: mongosh
+        label: mongosh
+        description: Opens mongosh authenticated and already using labdb.
+        cmd: [mongosh, -u, root, -p, labforge, --authenticationDatabase, admin, labdb]
+    ports:
+      - name: mongo
+        container: 27017
+        preferred: 27017
+        range: [27017, 27060]
+    env:
+      MONGO_INITDB_ROOT_USERNAME: root
+      MONGO_INITDB_ROOT_PASSWORD: labforge
+      MONGO_INITDB_DATABASE: labdb
+    volumes:
+      - name: data
+        path: /data/db
+    health:
+      type: exec
+      cmd: [sh, -c, 'mongosh --quiet --eval "db.adminCommand({ ping: 1 })"']
+      timeoutSec: 180
+      intervalSec: 4
+    credentials:
+      - label: Root account
+        username: root
+        password: labforge
+        secret: false
+
+  - id: mongo-express
+    name: Mongo Express
+    kind: web
+    image: mongo-express:1.0.2
+    description: Browser console for browsing collections and running queries.
+    estimateMb: 200
+    openPath: /
+    ports:
+      - name: web
+        container: 8081
+        preferred: 8082
+        range: [8082, 8120]
+    env:
+      ME_CONFIG_MONGODB_SERVER: mongo
+      ME_CONFIG_MONGODB_ADMINUSERNAME: root
+      ME_CONFIG_MONGODB_ADMINPASSWORD: labforge
+      ME_CONFIG_MONGODB_URL: mongodb://root:labforge@mongo:27017/
+      ME_CONFIG_BASICAUTH: 'false'
+      ME_CONFIG_MONGODB_ENABLE_ADMIN: 'true'
+    health:
+      type: http
+      port: web
+      path: /
+      expectStatus: [200, 401, 302]
+      timeoutSec: 180
+    credentials:
+      - label: Web console
+        note: Basic auth is disabled for the lab - the URL opens straight into the console.
+
+connections:
+  - from: mongo-express
+    to: mongo
+    internalUrl: mongodb://root:labforge@mongo:27017/
+    note: The connection string other containers and applications should use.
+
+guide: |
+  ## Two ways in
+
+  - **Mongo Express** — the web URL opens the console directly.
+  - **mongosh** — press **Shell** on the MongoDB Server service:
+
+  ```bash
+  mongosh -u root -p labforge --authenticationDatabase admin
+  ```
+
+  ## Documents, not rows
+
+  ```javascript
+  use labdb
+
+  db.students.insertMany([
+    { roll: 101, name: "Asha Nair",   branch: "IT", cgpa: 8.75,
+      subjects: ["DevOps", "DBMS"], address: { city: "Mumbai", pin: "400001" } },
+    { roll: 102, name: "Rahul Verma", branch: "IT", cgpa: 7.20,
+      subjects: ["DBMS"],            address: { city: "Pune",   pin: "411001" } },
+    { roll: 103, name: "Fatima Khan", branch: "CS", cgpa: 9.10,
+      subjects: ["DevOps", "AI"],    address: { city: "Mumbai", pin: "400002" } }
+  ])
+  ```
+
+  Note what a relational database could not do here without extra tables: a
+  nested `address` object and an array of `subjects` inside one record. That
+  contrast is the point of the practical.
+
+  ## Querying
+
+  ```javascript
+  db.students.find({ branch: "IT" }).pretty()
+  db.students.find({ cgpa: { $gt: 8 } })
+  db.students.find({ subjects: "DevOps" })                 // matches inside the array
+  db.students.find({ "address.city": "Mumbai" })           // nested field
+  db.students.find({}, { name: 1, cgpa: 1, _id: 0 })       // projection
+  db.students.find().sort({ cgpa: -1 }).limit(2)
+  ```
+
+  ## Updating
+
+  ```javascript
+  db.students.updateOne({ roll: 102 }, { $set: { cgpa: 7.9 } })
+  db.students.updateOne({ roll: 102 }, { $push: { subjects: "DevOps" } })
+  db.students.updateMany({ branch: "IT" }, { $inc: { cgpa: 0.1 } })
+  db.students.deleteOne({ roll: 103 })
+  ```
+
+  ## The aggregation pipeline
+
+  This is what examiners ask about most:
+
+  ```javascript
+  db.students.aggregate([
+    { $match: { cgpa: { $gt: 7 } } },
+    { $group: { _id: "$branch", count: { $sum: 1 }, avgCgpa: { $avg: "$cgpa" } } },
+    { $sort: { avgCgpa: -1 } }
+  ])
+
+  // flatten the subjects array and count enrolments per subject
+  db.students.aggregate([
+    { $unwind: "$subjects" },
+    { $group: { _id: "$subjects", students: { $sum: 1 } } },
+    { $sort: { students: -1 } }
+  ])
+  ```
+
+  ## Indexes
+
+  ```javascript
+  db.students.find({ branch: "IT" }).explain("executionStats")
+  db.students.createIndex({ branch: 1 })
+  db.students.find({ branch: "IT" }).explain("executionStats")
+  db.students.getIndexes()
+  ```
+
+  Compare `COLLSCAN` before and `IXSCAN` after.
+
+  ## Backup and restore
+
+  ```bash
+  mongodump -u root -p labforge --authenticationDatabase admin --db labdb --out /tmp/dump
+  mongorestore -u root -p labforge --authenticationDatabase admin /tmp/dump
+  ```
+
+  ## Connecting an application
+
+  From any other container on the lab network:
+
+  ```
+  mongodb://root:labforge@mongo:27017/labdb?authSource=admin
+  ```
+
+  From a program on your own machine, use `localhost` and the port shown on the
+  Services tab instead.

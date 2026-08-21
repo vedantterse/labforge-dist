@@ -1,0 +1,127 @@
+id: gitea
+title: Git Server + Webhooks (Gitea)
+practical: Practical 2.1
+module: Version Control & Collaboration using Git
+summary: A self-hosted GitHub-style server for the version control practical — branching, pull requests, merge conflicts and webhooks into Jenkins, all offline.
+tags: [git, gitea, webhooks, collaboration, lo2]
+version: 1.0.0
+estimateMb: 512
+
+services:
+  - id: gitea
+    name: Gitea
+    kind: web
+    image: gitea/gitea:1.22
+    description: Lightweight Git hosting with issues, pull requests and webhooks.
+    estimateMb: 400
+    openPath: /
+    ports:
+      - name: web
+        container: 3000
+        preferred: 3300
+        range: [3300, 3340]
+      - name: ssh
+        container: 22
+        preferred: 2222
+        range: [2222, 2260]
+    env:
+      USER_UID: '1000'
+      USER_GID: '1000'
+      GITEA__database__DB_TYPE: sqlite3
+      GITEA__server__DOMAIN: localhost
+      GITEA__server__SSH_DOMAIN: localhost
+      GITEA__server__SSH_PORT: '${port.ssh}'
+      # Without this, the clone URLs Gitea shows use port 3000 instead of the
+      # port Labforge actually published.
+      GITEA__server__ROOT_URL: '${url.web}/'
+      GITEA__security__INSTALL_LOCK: 'false'
+    volumes:
+      - name: data
+        path: /data
+    health:
+      type: http
+      port: web
+      path: /
+      timeoutSec: 180
+
+connections:
+  - from: jenkins
+    to: gitea
+    internalUrl: http://gitea:3000
+    note: >-
+      Clone URL to use in a Jenkins job when the Jenkins lab is also running.
+      The browser URL with localhost will not resolve from inside Jenkins.
+
+guide: |
+  ## Step 1 - finish installation
+
+  Open the web URL. Gitea shows its install page — everything is already filled
+  in for SQLite. Scroll to **Administrator Account Settings**, create your admin
+  user (remember the password), and press **Install Gitea**.
+
+  ## Step 2 - version control operations
+
+  Create a repository called `devops-lab`, then from your own terminal:
+
+  ```bash
+  git clone http://localhost:<web-port>/<your-user>/devops-lab.git
+  cd devops-lab
+  echo "# DevOps Lab" > README.md
+  git add README.md
+  git commit -m "Initial commit"
+  git push origin main
+  ```
+
+  Use the exact port shown on the Services tab.
+
+  ## Step 3 - branching and merging
+
+  ```bash
+  git checkout -b feature/login
+  echo "login page" > login.txt
+  git add . && git commit -m "Add login page"
+  git push -u origin feature/login
+  ```
+
+  In the web UI, open a **Pull Request** from `feature/login` into `main`, review
+  the diff, and merge it.
+
+  ## Step 4 - create a merge conflict on purpose
+
+  ```bash
+  git checkout main && git pull
+  echo "version A" > conflict.txt && git add . && git commit -m "A" && git push
+
+  git checkout -b feature/b HEAD~1
+  echo "version B" > conflict.txt && git add . && git commit -m "B"
+  git push -u origin feature/b
+  ```
+
+  Open a pull request — Gitea reports the conflict. Resolve it locally:
+
+  ```bash
+  git checkout feature/b
+  git merge main            # conflict appears
+  # edit conflict.txt, remove the <<<<<<< ======= >>>>>>> markers
+  git add conflict.txt
+  git commit
+  git push
+  ```
+
+  Screenshot the conflict markers and the resolved file for your journal.
+
+  ## Step 5 - webhook into Jenkins
+
+  If the Jenkins lab is running at the same time:
+
+  1. In Gitea: repository -> **Settings** -> **Webhooks** -> **Add Webhook** -> **Gitea**.
+  2. Target URL: `http://jenkins:8080/github-webhook/`
+  3. Trigger: **Push events**. Save, then press **Test Delivery**.
+
+  Again, `jenkins` is the container name — `localhost` would point Gitea at itself.
+
+  ## Why not github.com?
+
+  You can use GitHub for this practical. Gitea gives you the same workflow with
+  no account, no rate limits, and working webhooks even when the college network
+  blocks inbound traffic.

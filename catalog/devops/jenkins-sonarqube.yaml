@@ -1,0 +1,160 @@
+id: jenkins-sonarqube
+title: SAST — Jenkins + SonarQube
+practical: Practical 5.2
+module: Testing, Monitoring, Serverless & DevSecOps
+summary: Jenkins and SonarQube on one network, already able to reach each other, for the static application security testing practical.
+tags: [sonarqube, jenkins, sast, devsecops, lo5]
+version: 1.0.0
+estimateMb: 3072
+
+services:
+  - id: sonarqube
+    name: SonarQube
+    kind: web
+    image: sonarqube:lts-community
+    description: Static analysis server with its embedded Elasticsearch and database.
+    estimateMb: 2048
+    openPath: /
+    ports:
+      - name: web
+        container: 9000
+        preferred: 9000
+        range: [9000, 9040]
+    env:
+      SONAR_ES_BOOTSTRAP_CHECKS_DISABLE: 'true'
+    volumes:
+      - name: data
+        path: /opt/sonarqube/data
+      - name: extensions
+        path: /opt/sonarqube/extensions
+      - name: logs
+        path: /opt/sonarqube/logs
+    health:
+      type: log
+      match: SonarQube is operational
+      timeoutSec: 420
+    credentials:
+      - label: Login
+        username: admin
+        password: admin
+        secret: false
+        note: SonarQube forces a password change on first login.
+
+  - id: jenkins
+    name: Jenkins
+    kind: web
+    image: jenkins/jenkins:lts-jdk17
+    description: Runs the pipeline that sends code to SonarQube.
+    estimateMb: 1024
+    openPath: /
+    ports:
+      - name: web
+        container: 8080
+        preferred: 8080
+        range: [8080, 8120]
+      - name: agent
+        container: 50000
+        preferred: 50000
+        internal: true
+    volumes:
+      - name: home
+        path: /var/jenkins_home
+    health:
+      type: http
+      port: web
+      path: /login
+      expectStatus: [200, 403]
+      timeoutSec: 300
+    credentials:
+      - label: Unlock key
+        username: admin
+        from:
+          type: file
+          path: /var/jenkins_home/secrets/initialAdminPassword
+
+connections:
+  - from: jenkins
+    to: sonarqube
+    internalUrl: http://sonarqube:9000
+    note: >-
+      Put exactly this in Manage Jenkins - System - SonarQube servers. Using
+      http://localhost:9000 here is the single most common mistake: inside the
+      Jenkins container, localhost is Jenkins.
+  - from: sonarqube
+    to: jenkins
+    internalUrl: http://jenkins:8080
+    note: Webhook URL if you configure quality-gate callbacks back into Jenkins.
+
+guide: |
+  ## What this lab demonstrates
+
+  Static Application Security Testing: Jenkins builds the code, SonarQube
+  inspects it for bugs, code smells and vulnerabilities, and the pipeline fails
+  if the quality gate fails.
+
+  SonarQube needs 2 GB of RAM and takes 2-4 minutes to boot. Labforge waits for
+  the "SonarQube is operational" line before marking it ready.
+
+  ## Step 1 - SonarQube
+
+  1. Open the SonarQube URL, log in with `admin` / `admin`, and set a new password.
+  2. **Administration** -> **Security** -> **Users** -> your user -> **Tokens**.
+  3. Generate a token named `jenkins`, and copy it. You cannot view it again.
+
+  ## Step 2 - Jenkins
+
+  1. Unlock Jenkins with the key on the Services tab and install suggested plugins.
+  2. **Manage Jenkins** -> **Plugins** -> **Available** -> install **SonarQube Scanner**.
+  3. **Manage Jenkins** -> **Credentials** -> add a **Secret text** credential
+     containing the SonarQube token. Give it the ID `sonar-token`.
+  4. **Manage Jenkins** -> **System** -> **SonarQube servers** -> Add:
+     - Name: `sonar`
+     - Server URL: `http://sonarqube:9000`
+     - Token: the `sonar-token` credential
+  5. **Manage Jenkins** -> **Tools** -> **SonarQube Scanner** -> Add, name it
+     `sonar-scanner` and tick **Install automatically**.
+
+  ## Step 3 - the pipeline
+
+  ```groovy
+  pipeline {
+      agent any
+      stages {
+          stage('Checkout') {
+              steps {
+                  git url: 'https://github.com/SonarSource/sonar-scanning-examples.git',
+                      branch: 'master'
+              }
+          }
+          stage('SonarQube analysis') {
+              steps {
+                  script {
+                      def scanner = tool 'sonar-scanner'
+                      withSonarQubeEnv('sonar') {
+                          sh "${scanner}/bin/sonar-scanner " +
+                             "-Dsonar.projectKey=devops-lab " +
+                             "-Dsonar.sources=sonar-scanner/src"
+                      }
+                  }
+              }
+          }
+      }
+  }
+  ```
+
+  Run it, then refresh the SonarQube **Projects** page - `devops-lab` appears with
+  its analysis.
+
+  ## Why the URL matters
+
+  Each container has its own `localhost`. `http://sonarqube:9000` works because
+  both containers sit on the `labforge-net` network, where the container name is
+  a DNS name. Your browser, which is outside Docker, uses the `localhost:<port>`
+  URL instead. The **Connect tools** tab lists both for every service.
+
+  ## Troubleshooting
+
+  - **SonarQube exits immediately on Linux**: `vm.max_map_count` is too low. The
+    Environment screen has a one-click fix.
+  - **Pipeline hangs on the scanner download**: your network blocks the Sonar
+    update site; download the scanner manually and configure it as a local tool.

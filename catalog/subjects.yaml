@@ -1,0 +1,72 @@
+# Subject registry.
+#
+# Each entry becomes a card on the Labs screen. Labs live in `labs/<subject>/`,
+# and a lab's folder decides its subject unless it sets `subject:` explicitly.
+#
+# To add a subject: add an entry here, create the folder, drop in lab YAML.
+# `status: coming-soon` shows the card greyed out with no launch path.
+
+subjects:
+  - id: devops
+    name: DevOps Lab
+    description: CI/CD, containers, configuration automation, orchestration and monitoring.
+    icon: infinity
+    accent: '#6366f1'
+    status: available
+    order: 1
+
+  - id: database
+    name: Database Lab
+    description: Relational and document databases with browser-based admin consoles.
+    icon: database
+    accent: '#22d3ee'
+    status: available
+    order: 2
+
+  - id: unix
+    name: Unix / Linux Lab
+    description: A clean Ubuntu machine for shell scripting, permissions and process management.
+    icon: terminal
+    accent: '#f59e0b'
+    status: available
+    order: 3
+
+  - id: advanced-devops
+    name: Advanced DevOps Lab
+    description: Service mesh, GitOps, multi-cluster deployment and progressive delivery.
+    icon: layers
+    accent: '#a78bfa'
+    status: coming-soon
+    order: 4
+
+  - id: networking
+    name: Networking Lab
+    description: Routing, subnetting, packet capture and protocol analysis.
+    icon: network
+    accent: '#34d399'
+    status: coming-soon
+    order: 5
+
+  - id: python
+    name: Python Lab
+    description: Notebooks, virtual environments and a preconfigured scientific stack.
+    icon: code
+    accent: '#38bdf8'
+    status: coming-soon
+    order: 6
+
+  - id: ip
+    name: Internet Programming Lab
+    description: Web servers, PHP, Node.js and full LAMP/MERN stacks.
+    icon: globe
+    accent: '#fb7185'
+    status: coming-soon
+    order: 7
+
+  - id: security
+    name: Security Lab
+    description: Vulnerable targets, scanning tools and isolated exploitation practice.
+    icon: shield
+    accent: '#f87171'
+    status: coming-soon
+    order: 8

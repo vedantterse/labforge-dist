@@ -1,0 +1,96 @@
+id: jenkins
+title: Jenkins CI Server
+practical: Practical 3.1
+module: CI/CD Automation using Jenkins & Docker
+summary: A ready-to-use Jenkins controller for building CI pipelines. Labforge waits until Jenkins is actually serving and then hands you the unlock key.
+tags: [jenkins, ci, pipeline, lo3]
+version: 1.0.0
+estimateMb: 1024
+
+services:
+  - id: jenkins
+    name: Jenkins
+    kind: web
+    image: jenkins/jenkins:lts-jdk17
+    description: Jenkins LTS controller with Java 17.
+    estimateMb: 1024
+    openPath: /
+    ports:
+      - name: web
+        container: 8080
+        preferred: 8080
+        range: [8080, 8120]
+      - name: agent
+        container: 50000
+        preferred: 50000
+        range: [50000, 50050]
+        internal: true
+    env:
+      JAVA_OPTS: -Djenkins.install.runSetupWizard=true -Dhudson.model.DownloadService.noSignatureCheck=true
+    volumes:
+      - name: home
+        path: /var/jenkins_home
+    health:
+      type: http
+      port: web
+      path: /login
+      expectStatus: [200, 403]
+      timeoutSec: 300
+    credentials:
+      - label: Unlock key
+        username: admin
+        from:
+          type: file
+          path: /var/jenkins_home/secrets/initialAdminPassword
+        note: Jenkins is still generating the key - restart the service if this stays empty.
+
+guide: |
+  ## What you get
+
+  A Jenkins LTS controller on your machine, with its data on a Docker volume so
+  jobs and configuration survive stopping the lab.
+
+  ## First run
+
+  1. Click the **web** URL above. Jenkins asks to be unlocked.
+  2. Copy the **Unlock key** shown on the Services tab and paste it in.
+  3. Choose **Install suggested plugins**. This takes 2-4 minutes and needs internet.
+  4. Create your admin user. Any username works - remember it.
+
+  ## Practical 3.1 - build a CI pipeline
+
+  1. **New Item** -> name it `ci-demo` -> choose **Pipeline** -> OK.
+  2. Scroll to **Pipeline**, keep *Pipeline script*, and paste:
+
+  ```groovy
+  pipeline {
+      agent any
+      stages {
+          stage('Build') {
+              steps { echo 'Compiling the application' }
+          }
+          stage('Test') {
+              steps { echo 'Running unit tests' }
+          }
+          stage('Package') {
+              steps { echo 'Producing the build artifact' }
+          }
+      }
+  }
+  ```
+
+  3. **Save**, then **Build Now**. Open the run to see the stage view.
+
+  ## Building from a Git repository
+
+  Use **Pipeline script from SCM** and point it at a repository containing a
+  `Jenkinsfile`. If you are using the Gitea lab, the repository URL from inside
+  Jenkins is `http://gitea:3000/<user>/<repo>.git` - not `localhost`, because
+  inside the Jenkins container `localhost` means Jenkins itself.
+
+  ## Troubleshooting
+
+  - **Plugin installation fails**: your network blocks `updates.jenkins.io`. Skip
+    the suggested plugins and install `Pipeline` and `Git` individually later.
+  - **Unlock key is blank**: Jenkins had not finished booting. Press the restart
+    button on the service and check again.
