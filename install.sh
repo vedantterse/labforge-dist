@@ -115,13 +115,45 @@ fi
 
 if [ "$FORMAT" = "deb" ]; then
   say "Installing (you will be asked for your password)"
+
+  # --reinstall matters: without it apt silently skips when the same version is
+  # already registered, which leaves a half-installed or previously removed
+  # package looking like a success while writing nothing.
   if command -v apt-get >/dev/null 2>&1; then
-    sudo apt-get install -y "$FILE" || die "Installation failed."
+    sudo apt-get install -y --reinstall --allow-downgrades "$FILE" \
+      || sudo apt-get install -y "$FILE" \
+      || die "Installation failed."
   else
-    sudo dpkg -i "$FILE" || sudo apt-get -f install -y || die "Installation failed."
+    sudo dpkg -i --force-confnew "$FILE" || sudo apt-get -f install -y || die "Installation failed."
   fi
-  ok "Installed to /opt/Labforge"
-  LAUNCH="labforge"
+
+  # Ask dpkg where the files actually went rather than assuming a path.
+  PKG_FILES="$(dpkg -L labforge 2>/dev/null || true)"
+
+  LAUNCH="$(printf '%s\n' "$PKG_FILES" | grep -E '^/usr/(local/)?bin/' | head -1)"
+
+  if [ -z "$LAUNCH" ]; then
+    # The package did not ship a launcher on PATH. Find the executable under
+    # /opt and link it ourselves so `labforge` works from a terminal.
+    TARGET="$(printf '%s\n' "$PKG_FILES" | grep -E '^/opt/[^/]+/[^/]+$' \
+      | while IFS= read -r f; do [ -f "$f" ] && [ -x "$f" ] && echo "$f"; done | head -1)"
+
+    if [ -n "$TARGET" ]; then
+      sudo mkdir -p /usr/local/bin
+      sudo ln -sf "$TARGET" /usr/local/bin/labforge
+      LAUNCH="/usr/local/bin/labforge"
+      ok "Linked $TARGET to /usr/local/bin/labforge"
+    fi
+  fi
+
+  INSTALL_ROOT="$(printf '%s\n' "$PKG_FILES" | grep -E '^/opt/[^/]+$' | head -1)"
+  ok "Installed to ${INSTALL_ROOT:-/opt/Labforge}"
+
+  if [ -z "$LAUNCH" ]; then
+    warn "Installed, but no launcher was found on PATH."
+    warn "Start it from your applications menu, or run: $(printf '%s\n' "$PKG_FILES" | grep -E '^/opt/.*' | head -1)"
+    LAUNCH="(applications menu)"
+  fi
 else
   INSTALL_DIR="$HOME/.local/bin"
   APP_DIR="$HOME/.local/share/labforge"
