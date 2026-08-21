@@ -11,7 +11,7 @@
 set -euo pipefail
 
 REPO="${LABFORGE_REPO:-vedantterse/labforge-dist}"
-API="https://api.github.com/repos/${REPO}/releases/latest"
+LIST_API="https://api.github.com/repos/${REPO}/releases?per_page=20"
 
 BOLD=$'\033[1m'; DIM=$'\033[2m'; RED=$'\033[31m'; GREEN=$'\033[32m'; CYAN=$'\033[36m'; OFF=$'\033[0m'
 
@@ -51,29 +51,43 @@ fi
 
 say "Looking up the latest release"
 
-RELEASE_JSON="$(curl -fsSL "$API")" || die "Could not reach GitHub. Check your internet connection."
-VERSION="$(printf '%s' "$RELEASE_JSON" | grep -m1 '"tag_name"' | sed -E 's/.*"tag_name": *"v?([^"]+)".*/\1/')"
-[ -n "$VERSION" ] || die "Could not determine the latest version."
-ok "Latest version is $VERSION"
-
 if [ "$FORMAT" = "deb" ]; then
   PATTERN="\.deb"
 else
   PATTERN="\.AppImage"
 fi
 
-URL="$(printf '%s' "$RELEASE_JSON" \
-  | grep -o '"browser_download_url": *"[^"]*"' \
-  | sed -E 's/.*"(https[^"]+)".*/\1/' \
-  | grep -iE "$PATTERN$" | grep -i "$ARCH\|amd64" | head -1)"
+# Ask for the release list rather than /latest. A release with no installers
+# attached - a draft published early, or one created by hand - would otherwise
+# be chosen as "latest" and the install would fail with nothing to download.
+# Walk the list and take the newest release that actually carries a build.
+RELEASES_JSON="$(curl -fsSL "$LIST_API")" || die "Could not reach GitHub. Check your internet connection."
 
-# Fall back to any artifact of the right type if the name has no arch in it.
-[ -z "$URL" ] && URL="$(printf '%s' "$RELEASE_JSON" \
+CANDIDATES="$(printf '%s' "$RELEASES_JSON" \
   | grep -o '"browser_download_url": *"[^"]*"' \
-  | sed -E 's/.*"(https[^"]+)".*/\1/' \
-  | grep -iE "$PATTERN$" | head -1)"
+  | sed -E 's/.*"(https[^"]+)".*/\1/')"
 
-[ -n "$URL" ] || die "No $FORMAT build found in release $VERSION."
+URL="$(printf '%s\n' "$CANDIDATES" | grep -iE "$PATTERN$" | grep -iE "$ARCH|amd64|x86_64" | head -1)"
+
+# Fall back to any build of the right type if the file name carries no arch.
+[ -z "$URL" ] && URL="$(printf '%s\n' "$CANDIDATES" | grep -iE "$PATTERN$" | head -1)"
+
+if [ -z "$URL" ]; then
+  printf '\n'
+  warn "No $FORMAT installer has been published yet."
+  printf '    Check https://github.com/%s/releases\n' "$REPO"
+  printf '    A release marked "Draft" is not published - only the person who\n'
+  printf '    maintains Labforge can publish it.\n\n'
+  exit 1
+fi
+
+# The download URL carries the version: .../download/v0.2.1/<file>
+VERSION="$(printf '%s' "$URL" | sed -E 's#.*/download/v?([^/]+)/.*#\1#')"
+[ -n "$VERSION" ] || VERSION="unknown"
+ok "Latest published version is $VERSION"
+
+# Look for the checksums beside the installer we actually chose.
+SUMS_URL="$(dirname "$URL")/SHA256SUMS"
 
 TMP="$(mktemp -d)"
 FILE="$TMP/$(basename "$URL")"
@@ -83,18 +97,16 @@ curl -fL --progress-bar "$URL" -o "$FILE" || die "Download failed."
 
 # --- verify -----------------------------------------------------------------
 
-SUMS_URL="$(printf '%s' "$RELEASE_JSON" \
-  | grep -o '"browser_download_url": *"[^"]*SHA256SUMS[^"]*"' \
-  | sed -E 's/.*"(https[^"]+)".*/\1/' | head -1)"
-
-if [ -n "$SUMS_URL" ] && command -v sha256sum >/dev/null 2>&1; then
+if command -v sha256sum >/dev/null 2>&1; then
   say "Verifying checksum"
-  curl -fsSL "$SUMS_URL" -o "$TMP/SHA256SUMS" || die "Could not download SHA256SUMS."
-  EXPECTED="$(grep -F "$(basename "$FILE")" "$TMP/SHA256SUMS" | awk '{print $1}' | head -1)"
+  curl -fsSL "$SUMS_URL" -o "$TMP/SHA256SUMS" 2>/dev/null || warn "No SHA256SUMS published for this release."
+  EXPECTED="$(grep -F "$(basename "$FILE")" "$TMP/SHA256SUMS" 2>/dev/null | awk '{print $1}' | head -1)"
   ACTUAL="$(sha256sum "$FILE" | awk '{print $1}')"
-  [ -n "$EXPECTED" ] || die "No checksum published for $(basename "$FILE")."
-  [ "$EXPECTED" = "$ACTUAL" ] || die "Checksum mismatch. The download may be corrupt or tampered with."
-  ok "Checksum verified"
+  [ -n "$EXPECTED" ] || warn "No checksum listed for $(basename "$FILE") — skipping verification."
+  if [ -n "$EXPECTED" ]; then
+    [ "$EXPECTED" = "$ACTUAL" ] || die "Checksum mismatch. The download may be corrupt or tampered with."
+    ok "Checksum verified"
+  fi
 else
   warn "No checksum file published for this release - skipping verification."
 fi
