@@ -12,7 +12,7 @@ services:
   - id: postgres
     name: PostgreSQL Server
     kind: terminal
-    image: postgres:16-alpine
+    image: postgres:16.15-alpine
     description: PostgreSQL 16. Open a Shell and use psql.
     estimateMb: 400
     shell: [/bin/bash, /bin/sh]

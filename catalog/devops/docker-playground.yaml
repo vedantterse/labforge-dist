@@ -11,7 +11,7 @@ services:
   - id: docker
     name: Docker Sandbox
     kind: terminal
-    image: docker:27-dind
+    image: docker:29.7.2-dind
     description: A full Docker engine plus CLI and compose, in its own sandbox.
     estimateMb: 800
     privileged: true
@@ -118,7 +118,7 @@ guide: |
       depends_on:
         - cache
     cache:
-      image: redis:7-alpine
+      image: redis:7.4.11-alpine
   EOF
 
   docker compose up -d

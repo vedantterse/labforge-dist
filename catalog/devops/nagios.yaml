@@ -12,7 +12,7 @@ services:
   - id: nagios
     name: Nagios Core
     kind: web
-    image: jasonrivers/nagios:latest
+    image: jasonrivers/nagios:4.5.12
     description: Nagios Core 4 with the classic CGI web interface and the standard plugins.
     estimateMb: 500
     openPath: /nagios

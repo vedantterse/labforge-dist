@@ -11,7 +11,7 @@ services:
   - id: localstack
     name: LocalStack (fake AWS)
     kind: web
-    image: localstack/localstack:3
+    image: localstack/localstack:2026.07.5
     description: Emulates S3, EC2, IAM, Lambda and more on your machine.
     estimateMb: 900
     openPath: /_localstack/health
