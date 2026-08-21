@@ -11,8 +11,10 @@ services:
   - id: jenkins
     name: Jenkins Controller
     kind: web
-    image: jenkins/jenkins:lts-jdk17
-    description: The controller that schedules work onto the agents.
+    build:
+      context: jenkins-lab
+      tag: labforge/jenkins-lab:1
+    description: Jenkins 2.568.2 LTS, already set up, with the SSH agent plugins built in.
     estimateMb: 1024
     openPath: /
     ports:
@@ -35,11 +37,11 @@ services:
       expectStatus: [200, 403]
       timeoutSec: 300
     credentials:
-      - label: Unlock key
+      - label: Login
         username: admin
-        from:
-          type: file
-          path: /var/jenkins_home/secrets/initialAdminPassword
+        password: labforge
+        secret: false
+        note: Ready to use - the setup wizard and plugin download are already done.
 
   - id: agent
     name: Build Agent
@@ -59,17 +61,8 @@ services:
         note: Also usable as student / labforge with passwordless sudo.
 
 wiring:
-  # The Jenkins image does not always ship ssh-keygen; make sure it is there
-  # before the key exchange runs.
-  - type: exec
-    service: jenkins
-    user: root
-    description: Preparing SSH tooling on the controller
-    cmd:
-      - bash
-      - -lc
-      - command -v ssh-keygen >/dev/null 2>&1 || (apt-get update -qq && apt-get install -y -qq openssh-client)
-
+  # openssh-client is baked into the controller image, so the key exchange can
+  # run immediately.
   - type: ssh-key
     from: jenkins
     to: [agent]
@@ -106,10 +99,10 @@ guide: |
   Labforge has already generated an SSH keypair on the controller and installed
   the public key on both agents, so the connection step below just works.
 
-  ## Step 1 - unlock Jenkins
+  ## Step 1 - sign in
 
-  Open the controller URL, paste the **Unlock key** from the Services tab,
-  install the suggested plugins, and create your admin user.
+  Open the controller URL and sign in with **admin** / **labforge**. It is
+  already set up - the SSH plugins this lab needs are built into the image.
 
   ## Step 2 - add the SSH private key as a credential
 

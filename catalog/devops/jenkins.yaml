@@ -2,7 +2,7 @@ id: jenkins
 title: Jenkins CI Server
 practical: Practical 3.1
 module: CI/CD Automation using Jenkins & Docker
-summary: A ready-to-use Jenkins controller for building CI pipelines. Labforge waits until Jenkins is actually serving and then hands you the unlock key.
+summary: A Jenkins controller that is already set up - no unlock key, no setup wizard, and every plugin the practicals need is built in.
 tags: [jenkins, ci, pipeline, lo3]
 version: 1.0.0
 estimateMb: 1024
@@ -11,8 +11,10 @@ services:
   - id: jenkins
     name: Jenkins
     kind: web
-    image: jenkins/jenkins:lts-jdk17
-    description: Jenkins LTS controller with Java 17.
+    build:
+      context: jenkins-lab
+      tag: labforge/jenkins-lab:1
+    description: Jenkins 2.568.2 LTS on Java 21, with 96 plugins pre-installed.
     estimateMb: 1024
     openPath: /
     ports:
@@ -25,8 +27,6 @@ services:
         preferred: 50000
         range: [50000, 50050]
         internal: true
-    env:
-      JAVA_OPTS: -Djenkins.install.runSetupWizard=true -Dhudson.model.DownloadService.noSignatureCheck=true
     volumes:
       - name: home
         path: /var/jenkins_home
@@ -37,27 +37,23 @@ services:
       expectStatus: [200, 403]
       timeoutSec: 300
     credentials:
-      - label: Unlock key
+      - label: Login
         username: admin
-        from:
-          type: file
-          path: /var/jenkins_home/secrets/initialAdminPassword
-        note: Jenkins is still generating the key - restart the service if this stays empty.
+        password: labforge
+        secret: false
+        note: Ready to use - the setup wizard and plugin download are already done.
 
 guide: |
   ## What you get
 
-  A Jenkins LTS controller on your machine, with its data on a Docker volume so
-  jobs and configuration survive stopping the lab.
+  A Jenkins LTS controller that is **already set up**. No unlock key, no setup
+  wizard, no plugin download — everything the practicals need is built into the
+  image, so it works the same on every machine and does not depend on your
+  network at lab time.
 
-  ## First run
+  Sign in with **admin** / **labforge**.
 
-  1. Click the **web** URL above. Jenkins asks to be unlocked.
-  2. Copy the **Unlock key** shown on the Services tab and paste it in.
-  3. Choose **Install suggested plugins**. This takes 2-4 minutes and needs internet.
-  4. Create your admin user. Any username works - remember it.
-
-  ## Practical 3.1 - build a CI pipeline
+  ## Practical 3.1 — build a CI pipeline
 
   1. **New Item** -> name it `ci-demo` -> choose **Pipeline** -> OK.
   2. Scroll to **Pipeline**, keep *Pipeline script*, and paste:
@@ -84,13 +80,25 @@ guide: |
   ## Building from a Git repository
 
   Use **Pipeline script from SCM** and point it at a repository containing a
-  `Jenkinsfile`. If you are using the Gitea lab, the repository URL from inside
-  Jenkins is `http://gitea:3000/<user>/<repo>.git` - not `localhost`, because
+  `Jenkinsfile`. If you are running the Gitea lab too, the clone URL from inside
+  Jenkins is `http://gitea:3000/<user>/<repo>.git` — not `localhost`, because
   inside the Jenkins container `localhost` means Jenkins itself.
+
+  ## What the setup wizard would have done
+
+  Worth knowing for the viva, since you did not see it:
+
+  - Unlocked Jenkins with a key written to
+    `/var/jenkins_home/secrets/initialAdminPassword`
+  - Downloaded the "suggested" plugins from the Jenkins update centre
+  - Asked you to create the first admin user
+
+  All three are done for you here. You can still see the installed plugins under
+  **Manage Jenkins -> Plugins -> Installed**.
 
   ## Troubleshooting
 
-  - **Plugin installation fails**: your network blocks `updates.jenkins.io`. Skip
-    the suggested plugins and install `Pipeline` and `Git` individually later.
-  - **Unlock key is blank**: Jenkins had not finished booting. Press the restart
-    button on the service and check again.
+  - **Jobs queue but never run**: the controller has 2 executors; check
+    **Build Executor Status** in the sidebar.
+  - **A plugin you want is missing**: **Manage Jenkins -> Plugins -> Available**.
+    This needs internet, unlike everything else in this lab.

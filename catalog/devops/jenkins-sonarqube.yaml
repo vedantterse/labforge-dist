@@ -11,7 +11,7 @@ services:
   - id: sonarqube
     name: SonarQube
     kind: web
-    image: sonarqube:lts-community
+    image: sonarqube:26.8.0.126808-community
     description: Static analysis server with its embedded Elasticsearch and database.
     estimateMb: 2048
     openPath: /
@@ -43,8 +43,10 @@ services:
   - id: jenkins
     name: Jenkins
     kind: web
-    image: jenkins/jenkins:lts-jdk17
-    description: Runs the pipeline that sends code to SonarQube.
+    build:
+      context: jenkins-lab
+      tag: labforge/jenkins-lab:1
+    description: Jenkins 2.568.2 LTS with the SonarQube Scanner plugin already installed.
     estimateMb: 1024
     openPath: /
     ports:
@@ -66,11 +68,11 @@ services:
       expectStatus: [200, 403]
       timeoutSec: 300
     credentials:
-      - label: Unlock key
+      - label: Login
         username: admin
-        from:
-          type: file
-          path: /var/jenkins_home/secrets/initialAdminPassword
+        password: labforge
+        secret: false
+        note: Ready to use - the setup wizard and plugin download are already done.
 
 connections:
   - from: jenkins
@@ -103,15 +105,17 @@ guide: |
 
   ## Step 2 - Jenkins
 
-  1. Unlock Jenkins with the key on the Services tab and install suggested plugins.
-  2. **Manage Jenkins** -> **Plugins** -> **Available** -> install **SonarQube Scanner**.
-  3. **Manage Jenkins** -> **Credentials** -> add a **Secret text** credential
-     containing the SonarQube token. Give it the ID `sonar-token`.
-  4. **Manage Jenkins** -> **System** -> **SonarQube servers** -> Add:
+  Sign in with **admin** / **labforge**. The SonarQube Scanner plugin is already
+  installed, so you can go straight to configuration.
+
+  1. **Manage Jenkins** -> **Credentials** -> **System** -> **Global credentials**
+     -> add a **Secret text** credential containing the SonarQube token from
+     step 1. Give it the ID `sonar-token`.
+  2. **Manage Jenkins** -> **System** -> **SonarQube servers** -> Add:
      - Name: `sonar`
      - Server URL: `http://sonarqube:9000`
      - Token: the `sonar-token` credential
-  5. **Manage Jenkins** -> **Tools** -> **SonarQube Scanner** -> Add, name it
+  3. **Manage Jenkins** -> **Tools** -> **SonarQube Scanner** -> Add, name it
      `sonar-scanner` and tick **Install automatically**.
 
   ## Step 3 - the pipeline

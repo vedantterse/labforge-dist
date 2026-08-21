@@ -12,7 +12,7 @@ services:
   - id: mongo
     name: MongoDB Server
     kind: terminal
-    image: mongo:7
+    image: mongo:7.0.40
     description: MongoDB 7 replica-set-free single node. Open a Shell and run mongosh.
     estimateMb: 600
     shell: [/bin/bash, /bin/sh]
