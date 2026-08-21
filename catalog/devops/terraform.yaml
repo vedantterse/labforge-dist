@@ -1,0 +1,133 @@
+id: terraform
+title: Terraform + LocalStack (AWS)
+practical: Practical 4.3
+module: Configuration Automation, Orchestration & Cloud Provisioning
+summary: Provision AWS infrastructure with Terraform against LocalStack — real provider, real state file, no cloud account and no billing risk.
+tags: [terraform, aws, localstack, iac, lo4]
+version: 1.0.0
+estimateMb: 1280
+
+services:
+  - id: localstack
+    name: LocalStack (fake AWS)
+    kind: web
+    image: localstack/localstack:3
+    description: Emulates S3, EC2, IAM, Lambda and more on your machine.
+    estimateMb: 900
+    openPath: /_localstack/health
+    ports:
+      - name: edge
+        container: 4566
+        preferred: 4566
+        range: [4566, 4600]
+    env:
+      SERVICES: s3,ec2,iam,sts,lambda,logs,cloudwatch
+      DEBUG: '0'
+      DOCKER_HOST: unix:///var/run/docker.sock
+    dockerSocket: true
+    health:
+      type: http
+      port: edge
+      path: /_localstack/health
+      timeoutSec: 240
+
+  - id: terraform
+    name: Terraform Workbench
+    kind: terminal
+    build:
+      context: terraform-lab
+      tag: labforge/terraform-lab:1
+    description: Terraform CLI and AWS CLI, pre-configured to point at LocalStack.
+    estimateMb: 380
+    shell: [/bin/bash, /bin/sh]
+    shells:
+      - id: tf
+        label: Terraform console
+        description: Interactive HCL console against your configuration.
+        cmd: [sh, -c, 'cd /lab && terraform console']
+    health:
+      type: exec
+      cmd: [terraform, version]
+      timeoutSec: 90
+
+connections:
+  - from: terraform
+    to: localstack
+    internalUrl: http://localstack:4566
+    note: Already set as the provider endpoint in /lab/main.tf and as AWS_ENDPOINT_URL.
+
+guide: |
+  ## What this lab gives you
+
+  Terraform talks to the real AWS provider, but every API call goes to
+  **LocalStack** next door instead of Amazon. You write genuine Terraform, get a
+  genuine state file, and pay nothing.
+
+  ## Step 1 - open the workbench
+
+  Press **Shell** on the *Terraform Workbench* service.
+
+  ```bash
+  cd /lab
+  cat main.tf
+  ```
+
+  ## Step 2 - the core workflow
+
+  ```bash
+  terraform init      # downloads the AWS provider
+  terraform fmt
+  terraform validate
+  terraform plan      # what would change
+  terraform apply     # type yes
+  ```
+
+  ## Step 3 - prove the resource exists
+
+  ```bash
+  aws --endpoint-url=http://localstack:4566 s3 ls
+  terraform state list
+  terraform output bucket_name
+  ```
+
+  ## Step 4 - understand state
+
+  ```bash
+  cat terraform.tfstate | head -40
+  terraform show
+  ```
+
+  Change the bucket name in `main.tf`, run `terraform plan` again, and note that
+  Terraform proposes to destroy and recreate. That is the state file doing its job.
+
+  ## Step 5 - add a resource
+
+  Append to `main.tf`:
+
+  ```hcl
+  resource "aws_iam_user" "student" {
+    name = "devops-lab-user"
+  }
+
+  output "iam_user" {
+    value = aws_iam_user.student.name
+  }
+  ```
+
+  Then `terraform apply` and confirm:
+
+  ```bash
+  aws --endpoint-url=http://localstack:4566 iam list-users
+  ```
+
+  ## Step 6 - clean up
+
+  ```bash
+  terraform destroy
+  ```
+
+  ## Moving to real AWS
+
+  Delete the `endpoints` block and the `skip_*` lines from the provider, then
+  supply real credentials. Everything else in your configuration stays the same —
+  that portability is the point of the exercise.

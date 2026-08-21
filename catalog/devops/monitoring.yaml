@@ -1,0 +1,147 @@
+id: monitoring
+title: Monitoring — Prometheus + Grafana
+practical: Practical 5.4
+module: Testing, Monitoring, Serverless & DevSecOps
+summary: Prometheus already scraping a node exporter, with Grafana next to it. Add the data source, import a dashboard, and you have graphs in two minutes.
+tags: [prometheus, grafana, monitoring, metrics, lo5]
+version: 1.0.0
+estimateMb: 900
+
+services:
+  - id: prometheus
+    name: Prometheus
+    kind: web
+    build:
+      context: prometheus-lab
+      tag: labforge/prometheus-lab:1
+    description: Metrics database and scraper, pre-configured to collect from the node exporter.
+    estimateMb: 350
+    openPath: /targets
+    ports:
+      - name: web
+        container: 9090
+        preferred: 9090
+        range: [9090, 9130]
+    health:
+      type: http
+      port: web
+      path: /-/ready
+      timeoutSec: 120
+
+  - id: node-exporter
+    name: Node Exporter
+    kind: internal
+    image: prom/node-exporter:v1.8.1
+    description: Exposes CPU, memory, disk and network metrics for Prometheus to scrape.
+    estimateMb: 60
+    ports:
+      - name: metrics
+        container: 9100
+        preferred: 9100
+        range: [9100, 9140]
+        internal: true
+    health:
+      type: tcp
+      port: metrics
+      timeoutSec: 60
+
+  - id: grafana
+    name: Grafana
+    kind: web
+    image: grafana/grafana:11.1.0
+    description: Dashboards on top of Prometheus.
+    estimateMb: 400
+    openPath: /
+    ports:
+      - name: web
+        container: 3000
+        preferred: 3000
+        range: [3000, 3040]
+    env:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_USERS_ALLOW_SIGN_UP: 'false'
+    volumes:
+      - name: data
+        path: /var/lib/grafana
+    health:
+      type: http
+      port: web
+      path: /login
+      timeoutSec: 180
+    credentials:
+      - label: Login
+        username: admin
+        password: admin
+        secret: false
+
+connections:
+  - from: grafana
+    to: prometheus
+    internalUrl: http://prometheus:9090
+    note: Use exactly this as the Prometheus data source URL inside Grafana.
+  - from: prometheus
+    to: node-exporter
+    internalUrl: http://node-exporter:9100/metrics
+    note: Already configured as a scrape target — check Status - Targets in Prometheus.
+
+guide: |
+  ## Step 1 - confirm Prometheus is collecting
+
+  Open the Prometheus URL. It lands on **Status -> Targets**. Both `prometheus`
+  and `node` should be **UP**. If `node` is down, the exporter container has not
+  finished starting — wait and refresh.
+
+  Try a query on the **Graph** tab:
+
+  ```
+  rate(node_cpu_seconds_total{mode="system"}[1m])
+  ```
+
+  Other useful ones:
+
+  ```
+  node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes * 100
+  node_filesystem_avail_bytes{mountpoint="/"}
+  up
+  ```
+
+  ## Step 2 - connect Grafana
+
+  1. Open the Grafana URL, log in with `admin` / `admin`.
+  2. **Connections** -> **Data sources** -> **Add data source** -> **Prometheus**.
+  3. Prometheus server URL: `http://prometheus:9090`
+
+     This is the internal name. `http://localhost:9090` will fail here because
+     inside the Grafana container, localhost is Grafana.
+  4. **Save & test** — you should see "Successfully queried the Prometheus API".
+
+  ## Step 3 - a real dashboard in one step
+
+  1. **Dashboards** -> **New** -> **Import**.
+  2. Enter dashboard ID **1860** (Node Exporter Full) and press **Load**.
+  3. Select your Prometheus data source and **Import**.
+
+  You now have around 200 panels of live system metrics.
+
+  ## Step 4 - build one panel yourself
+
+  **New dashboard** -> **Add visualization** -> pick Prometheus -> enter:
+
+  ```
+  100 - (avg by(instance) (rate(node_cpu_seconds_total{mode="idle"}[1m])) * 100)
+  ```
+
+  Set the unit to **Percent (0-100)** and the title to "CPU usage". Save.
+
+  ## Step 5 - alerting
+
+  **Alerting** -> **Alert rules** -> **New alert rule**. Use the CPU query, set
+  the threshold to 80, and give it a 1-minute evaluation. Screenshot the rule and
+  its state for your journal.
+
+  ## Where Nagios fits
+
+  The syllabus lists Nagios as an alternative. Prometheus and Grafana are the
+  pull-based modern equivalent, and are what you will meet in industry — but note
+  in your journal that Nagios is push/check-based and agent-oriented.

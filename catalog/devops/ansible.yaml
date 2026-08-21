@@ -1,0 +1,123 @@
+id: ansible
+title: Ansible Configuration Automation
+practical: Practical 4.1
+module: Configuration Automation, Orchestration & Cloud Provisioning
+summary: An Ansible control node plus three Ubuntu machines to manage. SSH keys and the inventory file are generated for you, so the first playbook runs immediately.
+tags: [ansible, automation, ssh, lo4]
+version: 1.0.0
+estimateMb: 1536
+
+services:
+  - id: control
+    name: Ansible Control Node
+    kind: terminal
+    build:
+      context: ansible-control
+      tag: labforge/ansible-control:1
+    description: Where you run ansible commands. Open a Shell to use it.
+    estimateMb: 384
+    shell: [/bin/bash]
+    shells:
+      - id: ping
+        label: Ping all nodes
+        description: Runs the connectivity check across every managed node.
+        cmd: [sh, -c, 'ansible all -m ping; exec /bin/bash']
+    health:
+      type: exec
+      cmd: [ansible, --version]
+      timeoutSec: 90
+
+  - id: node
+    name: Managed Node
+    kind: node
+    replicas: 3
+    build:
+      context: lab-node
+      tag: labforge/lab-node:1
+    description: Ubuntu machine with SSH, the target of your playbooks.
+    estimateMb: 384
+    shell: [/bin/bash]
+    health:
+      type: exec
+      cmd: [sh, -c, 'pgrep sshd']
+      timeoutSec: 90
+    credentials:
+      - label: Login
+        username: root
+        password: labforge
+        secret: false
+
+wiring:
+  - type: ssh-key
+    from: control
+    to: [node]
+    inventoryPath: /lab/inventory.ini
+
+connections:
+  - from: control
+    to: node-1
+    internalUrl: node-1
+    note: Reach each managed node by name. The generated inventory already lists all three.
+
+guide: |
+  ## What is already done for you
+
+  - An SSH keypair was generated on the control node.
+  - Its public key was installed on `node-1`, `node-2` and `node-3`.
+  - `/lab/inventory.ini` was written listing all three under the group `lab`.
+
+  So the usual "set up passwordless SSH" busywork is finished before you start.
+
+  ## Step 1 - open a shell
+
+  Press **Shell** on the *Ansible Control Node* service above. You can also do it
+  from your own terminal with the command shown on that card.
+
+  ## Step 2 - confirm connectivity
+
+  ```bash
+  cat /lab/inventory.ini
+  ansible all -m ping
+  ```
+
+  You should get `pong` from all three nodes.
+
+  ## Step 3 - ad-hoc commands
+
+  ```bash
+  ansible all -m command -a "uptime"
+  ansible all -m apt -a "name=tree state=present"
+  ansible node-1 -m setup | head -40
+  ```
+
+  ## Step 4 - run a playbook
+
+  A working example ships with the image:
+
+  ```bash
+  cat /lab/playbooks/demo.yml
+  ansible-playbook /lab/playbooks/demo.yml
+  ```
+
+  It installs nginx on every node and writes a landing page. Verify it:
+
+  ```bash
+  ansible all -m uri -a "url=http://localhost return_content=yes" | grep Configured
+  ```
+
+  ## Step 5 - write your own
+
+  ```bash
+  vi /lab/playbooks/mine.yml
+  ansible-playbook /lab/playbooks/mine.yml --check   # dry run
+  ansible-playbook /lab/playbooks/mine.yml
+  ```
+
+  Structure to aim for in your journal: inventory, playbook, roles, handlers,
+  variables, and idempotency (run the playbook twice and show `changed=0`).
+
+  ## Troubleshooting
+
+  - **UNREACHABLE**: the node container is not running. Check the Services tab.
+  - **Files disappear after Stop**: the control node has no volume by design.
+    Keep playbooks you want to save in your own repository.

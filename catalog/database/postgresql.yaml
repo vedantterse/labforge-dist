@@ -1,0 +1,195 @@
+id: postgresql
+subject: database
+title: PostgreSQL
+practical: Practical 2
+module: Relational Databases
+summary: PostgreSQL 16 with pgAdmin 4 pre-registered against it, plus psql in a shell.
+tags: [postgresql, postgres, sql, rdbms, pgadmin]
+version: 1.0.0
+estimateMb: 1100
+
+services:
+  - id: postgres
+    name: PostgreSQL Server
+    kind: terminal
+    image: postgres:16-alpine
+    description: PostgreSQL 16. Open a Shell and use psql.
+    estimateMb: 400
+    shell: [/bin/bash, /bin/sh]
+    shells:
+      - id: psql
+        label: psql shell
+        description: Opens psql connected to labdb as the student superuser.
+        cmd: [psql, -U, student, -d, labdb]
+    ports:
+      - name: sql
+        container: 5432
+        preferred: 5432
+        range: [5432, 5470]
+    env:
+      POSTGRES_PASSWORD: labforge
+      POSTGRES_USER: student
+      POSTGRES_DB: labdb
+      PGDATA: /var/lib/postgresql/data/pgdata
+    volumes:
+      - name: data
+        path: /var/lib/postgresql/data
+    health:
+      type: exec
+      cmd: [sh, -c, 'pg_isready -U student -d labdb']
+      timeoutSec: 180
+      intervalSec: 3
+    credentials:
+      - label: Database login
+        username: student
+        password: labforge
+        secret: false
+        note: Database `labdb`. This account is the superuser here.
+
+  - id: pgadmin
+    name: pgAdmin 4
+    kind: web
+    image: dpage/pgadmin4:8.12
+    description: Browser console for PostgreSQL.
+    estimateMb: 600
+    openPath: /
+    ports:
+      - name: web
+        container: 80
+        preferred: 5050
+        range: [5050, 5090]
+    env:
+      PGADMIN_DEFAULT_EMAIL: student@lab.local
+      PGADMIN_DEFAULT_PASSWORD: labforge
+      PGADMIN_CONFIG_SERVER_MODE: 'False'
+      PGADMIN_CONFIG_MASTER_PASSWORD_REQUIRED: 'False'
+      PGADMIN_LISTEN_PORT: '80'
+    volumes:
+      - name: pgadmin
+        path: /var/lib/pgadmin
+    health:
+      type: http
+      port: web
+      path: /
+      timeoutSec: 240
+    credentials:
+      - label: pgAdmin login
+        username: student@lab.local
+        password: labforge
+        secret: false
+
+connections:
+  - from: pgadmin
+    to: postgres
+    internalUrl: postgres:5432
+    note: >-
+      When adding the server in pgAdmin, Host must be `postgres` - not localhost,
+      which inside the pgAdmin container means pgAdmin itself.
+
+guide: |
+  ## Connect pgAdmin to the server
+
+  pgAdmin cannot auto-discover the database, so register it once:
+
+  1. Open the pgAdmin URL and log in with `student@lab.local` / `labforge`.
+  2. Right-click **Servers** -> **Register** -> **Server**.
+  3. General tab -> Name: `Lab`
+  4. Connection tab:
+     - Host: `postgres`
+     - Port: `5432`
+     - Maintenance database: `labdb`
+     - Username: `student`
+     - Password: `labforge`, and tick **Save password**
+  5. Save.
+
+  ## Or just use psql
+
+  Press **Shell** on the PostgreSQL Server service:
+
+  ```bash
+  psql -U student -d labdb
+  ```
+
+  Useful meta-commands: `\l` list databases, `\dt` list tables,
+  `\d student` describe a table, `\q` quit.
+
+  ## Schema
+
+  ```sql
+  CREATE TABLE department (
+      dept_id   SERIAL PRIMARY KEY,
+      dept_name TEXT NOT NULL UNIQUE
+  );
+
+  CREATE TABLE employee (
+      emp_id    SERIAL PRIMARY KEY,
+      name      TEXT NOT NULL,
+      dept_id   INT REFERENCES department(dept_id) ON DELETE SET NULL,
+      salary    NUMERIC(10,2) CHECK (salary > 0),
+      hired_on  DATE DEFAULT CURRENT_DATE
+  );
+  ```
+
+  ```sql
+  INSERT INTO department (dept_name) VALUES ('Engineering'), ('Sales'), ('HR');
+
+  INSERT INTO employee (name, dept_id, salary) VALUES
+      ('Asha Nair',   1, 92000),
+      ('Rahul Verma', 1, 78000),
+      ('Fatima Khan', 2, 65000),
+      ('Dev Patel',   3, 54000);
+  ```
+
+  ## Queries worth putting in the journal
+
+  ```sql
+  -- aggregate per department
+  SELECT d.dept_name, COUNT(*) AS headcount, ROUND(AVG(e.salary), 2) AS avg_salary
+  FROM department d JOIN employee e ON e.dept_id = d.dept_id
+  GROUP BY d.dept_name
+  ORDER BY avg_salary DESC;
+
+  -- window function: rank within department
+  SELECT name, dept_id, salary,
+         RANK() OVER (PARTITION BY dept_id ORDER BY salary DESC) AS rank_in_dept
+  FROM employee;
+
+  -- CTE
+  WITH well_paid AS (
+      SELECT * FROM employee WHERE salary > 70000
+  )
+  SELECT d.dept_name, COUNT(*) FROM well_paid w
+  JOIN department d ON d.dept_id = w.dept_id
+  GROUP BY d.dept_name;
+  ```
+
+  Window functions and CTEs are where PostgreSQL differs most visibly from
+  MySQL — a good comparison point if the practical asks for one.
+
+  ## Transactions and isolation
+
+  ```sql
+  BEGIN;
+  UPDATE employee SET salary = salary * 1.1 WHERE dept_id = 1;
+  SELECT name, salary FROM employee WHERE dept_id = 1;
+  ROLLBACK;
+  ```
+
+  Open a **second** Shell on the same container and run `psql` there too, then
+  repeat the update without committing. The second session still sees the old
+  values — that is MVCC, and it demonstrates isolation properly.
+
+  ## EXPLAIN
+
+  ```sql
+  EXPLAIN ANALYZE SELECT * FROM employee WHERE salary > 70000;
+  CREATE INDEX idx_salary ON employee(salary);
+  EXPLAIN ANALYZE SELECT * FROM employee WHERE salary > 70000;
+  ```
+
+  ## Backup and restore
+
+  ```bash
+  pg_dump -U student labdb > /tmp/labdb.sql
+  psql -U student -d labdb -f /tmp/labdb.sql
+  ```

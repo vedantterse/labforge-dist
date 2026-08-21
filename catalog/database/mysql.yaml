@@ -1,0 +1,193 @@
+id: mysql
+subject: database
+title: MySQL
+practical: Practical 1
+module: Relational Databases
+summary: MySQL 8 with phpMyAdmin already connected to it, plus the mysql client in a shell — no local install, no root password reset.
+tags: [mysql, sql, rdbms, phpmyadmin]
+version: 1.0.0
+estimateMb: 900
+
+services:
+  - id: mysql
+    name: MySQL Server
+    kind: terminal
+    image: mysql:8.4
+    description: MySQL 8.4 server. Open a Shell to use the mysql command line client.
+    estimateMb: 600
+    shell: [/bin/bash, /bin/sh]
+    openPath: ''
+    shells:
+      - id: sql
+        label: MySQL shell
+        description: Opens the mysql client already logged in as root.
+        cmd: [mysql, -uroot, -plabforge, labdb]
+      - id: sql-student
+        label: student@labdb
+        description: The same client as the limited student account.
+        cmd: [mysql, -ustudent, -plabforge, labdb]
+    ports:
+      - name: sql
+        container: 3306
+        preferred: 3306
+        range: [3306, 3340]
+    env:
+      MYSQL_ROOT_PASSWORD: labforge
+      MYSQL_DATABASE: labdb
+      MYSQL_USER: student
+      MYSQL_PASSWORD: labforge
+    volumes:
+      - name: data
+        path: /var/lib/mysql
+    health:
+      type: exec
+      cmd: [sh, -c, 'mysqladmin ping -h 127.0.0.1 -uroot -plabforge --silent']
+      timeoutSec: 240
+      intervalSec: 4
+    credentials:
+      - label: Root account
+        username: root
+        password: labforge
+        secret: false
+      - label: Student account
+        username: student
+        password: labforge
+        secret: false
+        note: Has full rights on the `labdb` database.
+
+  - id: phpmyadmin
+    name: phpMyAdmin
+    kind: web
+    image: phpmyadmin:5.2
+    description: Browser console for MySQL, already pointed at the server.
+    estimateMb: 250
+    openPath: /
+    ports:
+      - name: web
+        container: 80
+        preferred: 8081
+        range: [8081, 8120]
+    env:
+      PMA_HOST: mysql
+      PMA_PORT: '3306'
+      UPLOAD_LIMIT: 64M
+    health:
+      type: http
+      port: web
+      path: /
+      timeoutSec: 120
+    credentials:
+      - label: Sign in with
+        username: root
+        password: labforge
+        secret: false
+
+connections:
+  - from: phpmyadmin
+    to: mysql
+    internalUrl: mysql:3306
+    note: Already configured. From your own applications running in Docker, use this host and port.
+
+guide: |
+  ## Two ways in
+
+  - **phpMyAdmin** — open the web URL and sign in as `root` / `labforge`.
+  - **The command line** — press **Shell** on the MySQL Server service.
+
+  ## Command line basics
+
+  ```bash
+  mysql -uroot -plabforge
+  ```
+
+  ```sql
+  SHOW DATABASES;
+  USE labdb;
+  ```
+
+  ## Create a schema
+
+  ```sql
+  CREATE TABLE student (
+      roll_no     INT PRIMARY KEY,
+      name        VARCHAR(60) NOT NULL,
+      branch      VARCHAR(20),
+      cgpa        DECIMAL(4,2),
+      admitted_on DATE DEFAULT (CURRENT_DATE)
+  );
+
+  CREATE TABLE marks (
+      id        INT AUTO_INCREMENT PRIMARY KEY,
+      roll_no   INT,
+      subject   VARCHAR(40),
+      score     INT CHECK (score BETWEEN 0 AND 100),
+      FOREIGN KEY (roll_no) REFERENCES student(roll_no) ON DELETE CASCADE
+  );
+  ```
+
+  ## Insert and query
+
+  ```sql
+  INSERT INTO student (roll_no, name, branch, cgpa) VALUES
+      (101, 'Asha Nair',    'IT', 8.75),
+      (102, 'Rahul Verma',  'IT', 7.20),
+      (103, 'Fatima Khan',  'CS', 9.10);
+
+  INSERT INTO marks (roll_no, subject, score) VALUES
+      (101, 'DevOps', 88), (101, 'DBMS', 91),
+      (102, 'DevOps', 65), (103, 'DBMS', 95);
+
+  SELECT * FROM student WHERE cgpa > 8;
+
+  SELECT s.name, AVG(m.score) AS average
+  FROM student s JOIN marks m ON s.roll_no = m.roll_no
+  GROUP BY s.name
+  HAVING AVG(m.score) > 70
+  ORDER BY average DESC;
+  ```
+
+  ## Joins, the part that carries marks
+
+  ```sql
+  SELECT s.name, m.subject, m.score
+  FROM student s INNER JOIN marks m ON s.roll_no = m.roll_no;
+
+  SELECT s.name, m.subject
+  FROM student s LEFT JOIN marks m ON s.roll_no = m.roll_no;
+  ```
+
+  Run the LEFT JOIN after deleting a student's marks and explain the NULLs.
+
+  ## Transactions
+
+  ```sql
+  START TRANSACTION;
+  UPDATE student SET cgpa = 9.50 WHERE roll_no = 102;
+  SELECT * FROM student WHERE roll_no = 102;
+  ROLLBACK;
+  SELECT * FROM student WHERE roll_no = 102;   -- unchanged
+  ```
+
+  ## Indexes and EXPLAIN
+
+  ```sql
+  EXPLAIN SELECT * FROM marks WHERE subject = 'DevOps';
+  CREATE INDEX idx_subject ON marks(subject);
+  EXPLAIN SELECT * FROM marks WHERE subject = 'DevOps';
+  ```
+
+  Screenshot both EXPLAIN outputs — the change from a full scan to an index
+  lookup is exactly what the examiner asks about.
+
+  ## Backup and restore
+
+  ```bash
+  mysqldump -uroot -plabforge labdb > /tmp/labdb.sql
+  mysql -uroot -plabforge -e "DROP DATABASE labdb; CREATE DATABASE labdb;"
+  mysql -uroot -plabforge labdb < /tmp/labdb.sql
+  ```
+
+  ## Your data persists
+
+  Stopping the lab keeps the database. Deleting the lab's volume is the only
+  thing that wipes it.

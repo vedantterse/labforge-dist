@@ -1,0 +1,105 @@
+id: agile-board
+title: Agile Project Management Board
+practical: Practical 1.1
+module: Agile Project Management & DevOps Integration
+summary: A self-hosted Jira/Trello-style board for epics, user stories, sprints and burndown — runs offline, no Atlassian account or licence needed.
+tags: [agile, scrum, kanban, jira, trello, lo1]
+version: 1.0.0
+estimateMb: 512
+
+services:
+  - id: board
+    name: Agile Board (Vikunja)
+    kind: web
+    image: vikunja/vikunja:0.24
+    description: Projects, Kanban views, labels, sprints and assignees — the same concepts Jira uses.
+    estimateMb: 400
+    openPath: /
+    ports:
+      - name: web
+        container: 3456
+        preferred: 3456
+        range: [3456, 3490]
+    env:
+      VIKUNJA_SERVICE_PUBLICURL: '${url.web}/'
+      VIKUNJA_SERVICE_JWTSECRET: labforge-devops-lab-secret
+      VIKUNJA_DATABASE_TYPE: sqlite
+      VIKUNJA_DATABASE_PATH: /db/vikunja.db
+      VIKUNJA_SERVICE_ENABLEREGISTRATION: 'true'
+    volumes:
+      - name: db
+        path: /db
+      - name: files
+        path: /app/vikunja/files
+    health:
+      type: http
+      port: web
+      path: /
+      timeoutSec: 180
+    credentials:
+      - label: First run
+        note: Register your own account on the sign-up page — the first user is the owner.
+
+guide: |
+  ## About tool choice
+
+  The syllabus says "Jira / Trello". Both are hosted services: Jira Server images
+  need a paid licence key, and Trello needs an account and internet access.
+
+  This lab gives you the same Agile concepts — projects, epics, user stories,
+  sprints, Kanban columns, assignees and progress tracking — in a board that runs
+  entirely on your machine. Everything you are assessed on transfers directly.
+
+  If your examiner insists on Jira specifically, use the **free Jira Cloud plan**
+  (up to 10 users) at atlassian.com and follow the same steps below.
+
+  ## Step 1 - create your account
+
+  Open the URL, press **Register**, and create a user. The first account is the
+  project owner.
+
+  ## Step 2 - build the project structure
+
+  1. Create a project called `E-Commerce Platform`.
+  2. Create these as tasks, which are your **epics**:
+     - `EPIC: User Authentication`
+     - `EPIC: Product Catalogue`
+     - `EPIC: Checkout & Payments`
+  3. Under each epic, add **user stories** in the standard form:
+     - *As a customer, I want to log in with my email so that I can see my orders.*
+     - *As a customer, I want to filter products by price so that I can find items in budget.*
+  4. Break each story into **tasks** using subtasks or a checklist.
+
+  ## Step 3 - estimate and prioritise
+
+  Add labels for story points: `SP-1`, `SP-2`, `SP-3`, `SP-5`, `SP-8`. Set
+  priorities on the backlog items. Record your reasoning — the examiner asks why
+  a story was pointed the way it was.
+
+  ## Step 4 - run a sprint
+
+  1. Switch the project to the **Kanban** view.
+  2. Create the columns: `Backlog`, `Sprint Backlog`, `In Progress`, `Review`, `Done`.
+  3. Pick a sprint goal and move 5-8 stories into `Sprint Backlog`.
+  4. Set a due date two weeks out on each — this is your sprint boundary.
+  5. Move cards across the board as work progresses.
+
+  ## Step 5 - the reports your journal needs
+
+  - **Burndown chart**: plot remaining story points against days. The Gantt and
+    Upcoming views give you the dates; draw the chart in a spreadsheet.
+  - **Velocity**: total story points completed per sprint, over 2-3 sprints.
+  - **Sprint retrospective**: what went well, what did not, what changes next sprint.
+
+  ## Step 6 - the DevOps integration part
+
+  Lab Objective 1 asks you to link Agile tracking to your pipeline. The industry
+  pattern is a commit convention:
+
+  ```bash
+  git commit -m "TASK-14: add login form validation"
+  ```
+
+  Then in the Jenkins or Gitea lab, show the commit, the build it triggered, and
+  the card it belongs to. Explain traceability from user story to deployment in
+  your write-up — that is what the objective is really testing.

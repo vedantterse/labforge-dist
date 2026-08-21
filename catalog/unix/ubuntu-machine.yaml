@@ -1,0 +1,186 @@
+id: ubuntu-machine
+subject: unix
+title: Ubuntu Machine
+practical: Practical 1
+module: Shell Environment
+summary: A clean Ubuntu 22.04 machine with a normal user and sudo, for shell scripting, file permissions, processes and text processing.
+tags: [ubuntu, linux, shell, bash, sudo]
+version: 1.0.0
+estimateMb: 400
+
+services:
+  - id: ubuntu
+    name: Ubuntu 22.04
+    kind: node
+    build:
+      context: lab-node
+      tag: labforge/lab-node:1
+    description: Full Ubuntu userspace with the standard tools. Break it freely.
+    estimateMb: 384
+    shell: [/bin/bash]
+    health:
+      type: exec
+      cmd: [sh, -c, 'pgrep sshd']
+      timeoutSec: 90
+    credentials:
+      - label: Normal user
+        username: student
+        password: labforge
+        secret: false
+        note: Passwordless sudo. Use this account for the exercises.
+      - label: Root
+        username: root
+        password: labforge
+        secret: false
+
+guide: |
+  ## Getting in
+
+  Press **Shell** on the service above. You land as `root`. For the exercises,
+  switch to the normal user — permissions only make sense as a non-root user:
+
+  ```bash
+  su - student
+  ```
+
+  From your own terminal you can also use the `docker exec` command shown on the
+  service card.
+
+  ## Filesystem and navigation
+
+  ```bash
+  pwd; ls -la; cd /etc; ls | head
+  mkdir -p ~/lab/{scripts,data,logs}
+  tree ~/lab 2>/dev/null || find ~/lab
+  cp /etc/passwd ~/lab/data/
+  mv ~/lab/data/passwd ~/lab/data/users.txt
+  ```
+
+  ## Permissions
+
+  ```bash
+  cd ~/lab
+  touch secret.txt
+  ls -l secret.txt
+  chmod 600 secret.txt        # rw for owner only
+  chmod u+x,g-r secret.txt
+  ls -l secret.txt
+  umask
+  sudo chown root:root secret.txt
+  cat secret.txt              # now denied - explain why in your journal
+  ```
+
+  Write out what `640`, `755` and `4755` mean and which bit is the setuid bit.
+
+  ## Text processing — the exam favourites
+
+  ```bash
+  cut -d: -f1,7 /etc/passwd | head
+  grep -c bash /etc/passwd
+  awk -F: '$3 >= 1000 {print $1, $3}' /etc/passwd
+  sed 's/bash/sh/g' /etc/passwd | head -3
+  sort -t: -k3 -n /etc/passwd | tail -5
+  wc -l /etc/passwd
+  cat /etc/passwd | awk -F: '{print $7}' | sort | uniq -c | sort -rn
+  ```
+
+  That last pipeline — count how many accounts use each login shell — combines
+  four tools and is a classic viva question.
+
+  ## Processes
+
+  ```bash
+  ps aux | head
+  sleep 300 &
+  jobs
+  ps -ef | grep sleep
+  kill %1
+  top -b -n1 | head -15
+  nice -n 10 sleep 60 &
+  ```
+
+  ## Shell scripting
+
+  ```bash
+  cat > ~/lab/scripts/report.sh <<'EOF'
+  #!/bin/bash
+  # Summarise a directory. Usage: report.sh <path>
+  set -euo pipefail
+
+  DIR="${1:-.}"
+
+  if [ ! -d "$DIR" ]; then
+      echo "Error: '$DIR' is not a directory" >&2
+      exit 1
+  fi
+
+  echo "Report for: $DIR"
+  echo "Generated:  $(date '+%Y-%m-%d %H:%M:%S')"
+  echo "----------------------------------------"
+
+  files=$(find "$DIR" -maxdepth 1 -type f | wc -l)
+  dirs=$(find "$DIR" -maxdepth 1 -mindepth 1 -type d | wc -l)
+
+  echo "Files:       $files"
+  echo "Directories: $dirs"
+  echo "Total size:  $(du -sh "$DIR" | cut -f1)"
+
+  echo
+  echo "Largest entries:"
+  du -ah "$DIR" 2>/dev/null | sort -rh | head -5
+  EOF
+
+  chmod +x ~/lab/scripts/report.sh
+  ~/lab/scripts/report.sh /etc
+  ```
+
+  It covers arguments with a default, input validation, exit codes, command
+  substitution and a pipeline — enough for most scripting practicals.
+
+  ## Loops and conditionals
+
+  ```bash
+  for i in {1..5}; do echo "Line $i" >> ~/lab/logs/app.log; done
+
+  while read -r line; do
+      echo "Read: $line"
+  done < ~/lab/logs/app.log
+
+  n=7
+  if (( n % 2 == 0 )); then echo "$n is even"; else echo "$n is odd"; fi
+
+  case "$(uname -s)" in
+      Linux)  echo "Running on Linux" ;;
+      *)      echo "Something else" ;;
+  esac
+  ```
+
+  ## Users and groups
+
+  ```bash
+  sudo useradd -m -s /bin/bash tester
+  sudo passwd tester
+  sudo groupadd project
+  sudo usermod -aG project tester
+  id tester
+  getent group project
+  sudo userdel -r tester
+  ```
+
+  ## Archiving and scheduling
+
+  ```bash
+  tar -czf ~/lab-backup.tar.gz ~/lab
+  tar -tzf ~/lab-backup.tar.gz | head
+  tar -xzf ~/lab-backup.tar.gz -C /tmp
+
+  crontab -l 2>/dev/null
+  echo "*/5 * * * * /home/student/lab/scripts/report.sh /etc >> /tmp/report.log" | crontab -
+  crontab -l
+  ```
+
+  ## Nothing here is permanent
+
+  This machine has no volume. Stop and launch the lab and you get a clean
+  system — which is exactly what you want when an exercise goes wrong. Copy
+  anything you want to keep out with `docker cp`.
