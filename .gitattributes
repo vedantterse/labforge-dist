@@ -1,0 +1,13 @@
+# Shell scripts and manifests must keep LF endings. A CRLF install.sh fails on
+# Linux with "bad interpreter: /usr/bin/env bash^M", which is baffling to debug.
+* text=auto eol=lf
+
+*.sh        text eol=lf
+*.yaml      text eol=lf
+*.yml       text eol=lf
+Dockerfile  text eol=lf
+*.tf        text eol=lf
+
+*.png       binary
+*.ico       binary
+*.jpg       binary
