@@ -2,17 +2,21 @@ id: terraform
 title: Terraform + LocalStack (AWS)
 practical: Practical 4.3
 module: Configuration Automation, Orchestration & Cloud Provisioning
-summary: Provision AWS infrastructure with Terraform against LocalStack — real provider, real state file, no cloud account and no billing risk.
+summary: Provision AWS infrastructure with Terraform against a local AWS emulator - the real provider and a real state file, with no cloud account and no billing risk.
 tags: [terraform, aws, localstack, iac, lo4]
 version: 1.0.0
 estimateMb: 1280
 
 services:
   - id: localstack
-    name: LocalStack (fake AWS)
+    name: LocalStack
     kind: web
-    image: localstack/localstack:2026.07.5
-    description: Emulates S3, EC2, IAM, Lambda and more on your machine.
+    # 3.8.1 is the last release of the freely usable community line. Newer
+    # date-based tags (2026.x) require a paid LOCALSTACK_AUTH_TOKEN and exit with
+    # code 55 immediately - Docker then restarts them forever, which looks like a
+    # slow start rather than a licensing failure.
+    image: localstack/localstack:3.8.1
+    description: Local AWS cloud emulator - S3, EC2, IAM, Lambda, CloudWatch and more.
     estimateMb: 900
     openPath: /_localstack/health
     ports:

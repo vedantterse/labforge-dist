@@ -12,6 +12,12 @@ services:
     name: Agile Board (Vikunja)
     kind: web
     image: vikunja/vikunja:0.24
+    # The image runs as uid 1000, but a fresh named volume is owned by root and
+    # /db does not exist in the image for Docker to copy ownership from - so
+    # Vikunja exits with "permission denied" on its own database. Running as root
+    # avoids the mismatch without needing a derived image (the base is distroless,
+    # so there is no shell to chown with).
+    user: "0:0"
     description: Projects, Kanban views, labels, sprints and assignees — the same concepts Jira uses.
     estimateMb: 400
     openPath: /

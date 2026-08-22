@@ -1,6 +1,6 @@
 {
   "version": "2026-08-22",
-  "minAppVersion": "0.2.18",
+  "minAppVersion": "0.2.20",
   "subjectsFile": "subjects.yaml",
   "labs": [
     {
@@ -29,7 +29,7 @@
       "subject": "devops",
       "file": "agile-board.yaml",
       "version": "1.0.0",
-      "sha256": "08a0763b337449ffffbae36295c904ecee75b2747b369b00b0e65a33c72dd222"
+      "sha256": "35f649ce1d7d02d24ed7be5fd4df71db11fd2cf39a33ef12617317c7827798f3"
     },
     {
       "id": "ansible",
@@ -113,7 +113,7 @@
       "subject": "devops",
       "file": "terraform.yaml",
       "version": "1.0.0",
-      "sha256": "3db2f3db60425060a2007933cf42e447e4798f08e0f9b77a91690aaf249b1f87"
+      "sha256": "842809cfd110e66054d2fdfe777289ac1e8dc16af61737c2582a5947c6caf26f"
     },
     {
       "id": "tomcat",
