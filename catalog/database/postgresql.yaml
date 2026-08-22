@@ -5,7 +5,7 @@ practical: Practical 2
 module: Relational Databases
 summary: PostgreSQL 16 with pgAdmin 4 pre-registered against it, plus psql in a shell.
 tags: [postgresql, postgres, sql, rdbms, pgadmin]
-version: 1.0.0
+version: 1.1.0
 estimateMb: 1100
 
 services:
@@ -59,7 +59,10 @@ services:
         preferred: 5050
         range: [5050, 5090]
     env:
-      PGADMIN_DEFAULT_EMAIL: student@lab.local
+      # pgAdmin validates this address and rejects .local outright - it exits
+      # with "does not appear to be a valid email address" and then restart-loops.
+      # example.com is reserved for exactly this purpose.
+      PGADMIN_DEFAULT_EMAIL: student@example.com
       PGADMIN_DEFAULT_PASSWORD: labforge
       PGADMIN_CONFIG_SERVER_MODE: 'False'
       PGADMIN_CONFIG_MASTER_PASSWORD_REQUIRED: 'False'
@@ -74,7 +77,7 @@ services:
       timeoutSec: 240
     credentials:
       - label: pgAdmin login
-        username: student@lab.local
+        username: student@example.com
         password: labforge
         secret: false
 
@@ -91,7 +94,7 @@ guide: |
 
   pgAdmin cannot auto-discover the database, so register it once:
 
-  1. Open the pgAdmin URL and log in with `student@lab.local` / `labforge`.
+  1. Open the pgAdmin URL and log in with `student@example.com` / `labforge`.
   2. Right-click **Servers** -> **Register** -> **Server**.
   3. General tab -> Name: `Lab`
   4. Connection tab:

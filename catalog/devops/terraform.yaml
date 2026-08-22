@@ -4,7 +4,7 @@ practical: Practical 4.3
 module: Configuration Automation, Orchestration & Cloud Provisioning
 summary: Provision AWS infrastructure with Terraform against a local AWS emulator - the real provider and a real state file, with no cloud account and no billing risk.
 tags: [terraform, aws, localstack, iac, lo4]
-version: 1.0.0
+version: 1.1.0
 estimateMb: 1280
 
 services:

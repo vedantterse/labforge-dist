@@ -1,6 +1,6 @@
 {
   "version": "2026-08-22",
-  "minAppVersion": "0.2.20",
+  "minAppVersion": "0.2.22",
   "subjectsFile": "subjects.yaml",
   "labs": [
     {
@@ -21,15 +21,15 @@
       "id": "postgresql",
       "subject": "database",
       "file": "postgresql.yaml",
-      "version": "1.0.0",
-      "sha256": "da64453f4e6c00353513e8d6997cabbe95090b884a0755f7a51499dab27ba4a9"
+      "version": "1.1.0",
+      "sha256": "bfeb193b7fa9b4069a85eef7ddf203db0c90699ad32c84549cbd2dd3a403d92b"
     },
     {
       "id": "agile-board",
       "subject": "devops",
       "file": "agile-board.yaml",
-      "version": "1.0.0",
-      "sha256": "35f649ce1d7d02d24ed7be5fd4df71db11fd2cf39a33ef12617317c7827798f3"
+      "version": "1.1.0",
+      "sha256": "4728c86cbc21e834f0149c51bf4634e8ed52fee47f69dd6e648d3329dab7d807"
     },
     {
       "id": "ansible",
@@ -49,8 +49,8 @@
       "id": "gitea",
       "subject": "devops",
       "file": "gitea.yaml",
-      "version": "1.0.0",
-      "sha256": "d983bb7009d340579e85a5d787e5c3d5649f9d2ba59f54b07a03220d3bd56c07"
+      "version": "1.1.0",
+      "sha256": "d935d3e61c71da57334ddaf3f9e61afef6bd91064b710e90a607044c5eccff6d"
     },
     {
       "id": "jenkins",
@@ -112,8 +112,8 @@
       "id": "terraform",
       "subject": "devops",
       "file": "terraform.yaml",
-      "version": "1.0.0",
-      "sha256": "842809cfd110e66054d2fdfe777289ac1e8dc16af61737c2582a5947c6caf26f"
+      "version": "1.1.0",
+      "sha256": "f04b357cc6a10a5b686c7ffddbbe8ed59fc3be13fd3fd90eecfb87f5bc7765b6"
     },
     {
       "id": "tomcat",

@@ -4,7 +4,7 @@ practical: Practical 2.1
 module: Version Control & Collaboration using Git
 summary: A self-hosted GitHub-style server for the version control practical — branching, pull requests, merge conflicts and webhooks into Jenkins, all offline.
 tags: [git, gitea, webhooks, collaboration, lo2]
-version: 1.0.0
+version: 1.1.0
 estimateMb: 512
 
 services:
@@ -24,6 +24,9 @@ services:
         container: 22
         preferred: 2222
         range: [2222, 2260]
+        # SSH, not HTTP. Shown as an address rather than a browser link, because
+        # opening an SSH port in a browser just produces a blank page.
+        browsable: false
     env:
       USER_UID: '1000'
       USER_GID: '1000'
@@ -34,7 +37,20 @@ services:
       # Without this, the clone URLs Gitea shows use port 3000 instead of the
       # port Labforge actually published.
       GITEA__server__ROOT_URL: '${url.web}/'
-      GITEA__security__INSTALL_LOCK: 'false'
+      GITEA__database__PATH: /data/gitea/gitea.db
+      GITEA__server__HTTP_PORT: '3000'
+      # The web install wizard is skipped on purpose. With GITEA__ environment
+      # variables in play, submitting it makes Gitea rewrite app.ini, restart,
+      # fail to reload its own config ("Unable to load config file for a
+      # installed Gitea instance") and exit - which shows up in the browser as
+      # ERR_EMPTY_RESPONSE.
+      #
+      # Registration stays open and NO admin is pre-created, so the first person
+      # to sign up becomes the administrator. Students still create their own
+      # username and password, exactly as they would on GitHub.
+      GITEA__security__INSTALL_LOCK: 'true'
+      GITEA__service__DISABLE_REGISTRATION: 'false'
+      GITEA__service__REQUIRE_SIGNIN_VIEW: 'false'
     volumes:
       - name: data
         path: /data
@@ -43,6 +59,11 @@ services:
       port: web
       path: /
       timeoutSec: 180
+    credentials:
+      - label: First run
+        note: >-
+          Press Register on the site and choose your own username and password.
+          The first account created becomes the administrator.
 
 connections:
   - from: jenkins
@@ -53,11 +74,14 @@ connections:
       The browser URL with localhost will not resolve from inside Jenkins.
 
 guide: |
-  ## Step 1 - finish installation
+  ## Step 1 - create your account
 
-  Open the web URL. Gitea shows its install page — everything is already filled
-  in for SQLite. Scroll to **Administrator Account Settings**, create your admin
-  user (remember the password), and press **Install Gitea**.
+  Open the web URL and press **Register**. Choose your own username, email and
+  password, just as you would on GitHub.
+
+  The first account created becomes the **administrator**, so whoever registers
+  first owns the server. There is no installation wizard to work through - the
+  server is already configured.
 
   ## Step 2 - version control operations
 
