@@ -1,0 +1,148 @@
+id: tomcat
+subject: devops
+title: Tomcat Deployment Target
+practical: Practical 3.1 (CD)
+module: CI/CD Automation using Jenkins & Docker
+summary: An Apache Tomcat server with the manager application enabled, so a Jenkins pipeline can deploy a WAR to it and you can watch the application appear.
+tags: [tomcat, deployment, cd, war, lo3]
+version: 1.0.0
+estimateMb: 512
+
+services:
+  - id: tomcat
+    name: Tomcat
+    kind: web
+    build:
+      context: tomcat-lab
+      tag: labforge/tomcat-lab:1
+    description: Tomcat 11 on Java 21, with the manager app ready to accept deployments.
+    estimateMb: 400
+    openPath: /
+    ports:
+      - name: web
+        container: 8080
+        # Jenkins also wants 8080. Labforge gives whichever starts second the
+        # next free port and shows the real URL - both labs run side by side.
+        preferred: 8080
+        range: [8080, 8120]
+    health:
+      type: http
+      port: web
+      path: /
+      timeoutSec: 180
+    credentials:
+      - label: Manager login
+        username: admin
+        password: labforge
+        secret: false
+        note: Works for both the browser manager and the text API a pipeline uses.
+
+connections:
+  - from: jenkins
+    to: tomcat
+    internalUrl: http://tomcat:8080/manager/text
+    note: >-
+      The deploy endpoint to use from a Jenkins pipeline. Always the container
+      port 8080, never the port shown in your browser - inside Jenkins,
+      localhost means Jenkins.
+
+guide: |
+  ## Why this lab exists
+
+  The Jenkins lab ends at "build succeeded". This is the other half: taking the
+  artifact and actually deploying it somewhere. Together they are the CI **and**
+  CD in Practical 3.
+
+  ## About the port
+
+  Tomcat and Jenkins both want port 8080. Whichever you start second is given the
+  next free port automatically, and the Services tab shows the real URL. **Both
+  run at the same time** - you do not have to stop one to use the other.
+
+  This only affects your browser. Between containers the port never changes: from
+  Jenkins, Tomcat is always `http://tomcat:8080`.
+
+  ## Step 1 - look around
+
+  Open the web URL. You get the Tomcat welcome page. Then open `/manager/html`
+  and sign in with `admin` / `labforge`. The stock Tomcat image has neither of
+  these working; this image enables them so the practical is about deployment
+  rather than about configuring Tomcat.
+
+  ## Step 2 - deploy by hand first
+
+  Build a trivial WAR anywhere you like, or use the manager's **WAR file to
+  deploy** box to upload one. It appears in the application list immediately and
+  is served at the context path you gave it.
+
+  ## Step 3 - deploy from Jenkins
+
+  Start the Jenkins lab as well, then create a pipeline job:
+
+  ```groovy
+  pipeline {
+      agent any
+      environment {
+          TOMCAT = 'http://tomcat:8080/manager/text'
+      }
+      stages {
+          stage('Build') {
+              steps {
+                  sh '''
+                    mkdir -p build/WEB-INF
+                    echo "<html><body><h1>Built by Jenkins #${BUILD_NUMBER}</h1></body></html>" > build/index.html
+                    printf '<web-app xmlns="https://jakarta.ee/xml/ns/jakartaee" version="6.0"/>' > build/WEB-INF/web.xml
+                    (cd build && jar -cf ../app.war .) || (cd build && zip -qr ../app.war .)
+                  '''
+              }
+          }
+          stage('Deploy to Tomcat') {
+              steps {
+                  sh '''
+                    curl -sS --fail -u admin:labforge \
+                      -T app.war \
+                      "$TOMCAT/deploy?path=/app&update=true"
+                  '''
+              }
+          }
+          stage('Verify') {
+              steps {
+                  sh 'curl -sS --fail http://tomcat:8080/app/ | grep "Built by Jenkins"'
+              }
+          }
+      }
+  }
+  ```
+
+  Run it, then open `http://localhost:<tomcat-port>/app/` in your browser. The
+  build number in the page changes every time you rebuild - that is continuous
+  deployment working.
+
+  ## Step 4 - the manager text API
+
+  Worth knowing, because it is what the pipeline is using:
+
+  ```bash
+  curl -u admin:labforge http://tomcat:8080/manager/text/list
+  curl -u admin:labforge -T app.war "http://tomcat:8080/manager/text/deploy?path=/app&update=true"
+  curl -u admin:labforge "http://tomcat:8080/manager/text/undeploy?path=/app"
+  curl -u admin:labforge "http://tomcat:8080/manager/text/reload?path=/app"
+  ```
+
+  ## For the journal
+
+  Explain the difference between **continuous delivery** (the artifact is ready
+  to deploy, a human presses the button) and **continuous deployment** (the
+  pipeline deploys it automatically). This lab does the second. Say what you
+  would add before doing that to a real server: a staging environment, a smoke
+  test after deploy, and a way to roll back.
+
+  ## Troubleshooting
+
+  - **401 from the manager**: the credentials are `admin` / `labforge`, and the
+    pipeline must use `manager/text`, not `manager/html`.
+  - **Connection refused from Jenkins**: you used `localhost`. From inside
+    Jenkins that is Jenkins. Use `http://tomcat:8080`.
+  - **`jar: not found` in the build stage**: the pipeline falls back to `zip`.
+    If neither exists, build the WAR on your own machine and upload it through
+    the manager page instead.

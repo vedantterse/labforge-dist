@@ -1,6 +1,6 @@
 {
-  "version": "2026-08-21",
-  "minAppVersion": "0.2.6",
+  "version": "2026-08-22",
+  "minAppVersion": "0.2.18",
   "subjectsFile": "subjects.yaml",
   "labs": [
     {
@@ -114,6 +114,13 @@
       "file": "terraform.yaml",
       "version": "1.0.0",
       "sha256": "3db2f3db60425060a2007933cf42e447e4798f08e0f9b77a91690aaf249b1f87"
+    },
+    {
+      "id": "tomcat",
+      "subject": "devops",
+      "file": "tomcat.yaml",
+      "version": "1.0.0",
+      "sha256": "d04867b1623fad433449faf5eaeadf02f54b37da2abb48047d5c2cb87b6ab761"
     },
     {
       "id": "ubuntu-machine",
